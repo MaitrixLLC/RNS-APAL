@@ -43,6 +43,8 @@ typedef char _TCHAR;
 #else
 
 #endif
+
+
 #include "stdafx.h"
 #include "stdlib.h"
 #include "stdio.h"
@@ -51,6 +53,7 @@ typedef char _TCHAR;
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <cstdio>
 #include <cstring>
 #include <sstream>
 #include "utilities.h"
@@ -81,9 +84,9 @@ int main(int argc, _TCHAR* argv[])
 
 //	Format: init_RNS_APAL(int mode, int routine, int num_digs, int num_frac_digs, int* mod_array, const int* powers_array);	
 //	init_RNS_APAL(AUTO_GEN, USE_EXT_EUCL, 8, 0, NULL, NULL);								// Using Auto-generatoed, Integers Only, used in many tutorial examples
-//	init_RNS_APAL(CUSTOM|NO_POWERS, USE_BRUTE_LUT, 18, 6, modulus, ModPowers);				// 18 digit, CUSTOM modulus, with 6 digits of fractional range, see arrays above
+	init_RNS_APAL(CUSTOM, USE_EXT_EUCL, 18, 8, Modulus, ModPowers);							// 18 digit, CUSTOM modulus, with 6 digits of fractional range, see arrays above
 //	init_RNS_APAL(AUTO_GEN|NO_POWERS, USE_EXT_EUCL, 31, 8, NULL, NULL);						// Auto generated, No powers, 31 digits with 8 digits of fractional range				
-	init_RNS_APAL(AUTO_GEN, USE_EXT_EUCL, 31, 8, Modulus, ModPowers);						// Auto generated, With Powers, 31 digits with 8 digits fractional range
+//	init_RNS_APAL(AUTO_GEN, USE_EXT_EUCL, 31, 8, Modulus, ModPowers);						// Auto generated, With Powers, 31 digits with 8 digits fractional range
 
 
 	cout << "starting RNS-APAL library demo application ... \r" << endl;
@@ -1405,6 +1408,608 @@ char input[100];
 
 }
 
+void gcd(PPM* a, PPM* b, PPM* out_gcd)
+{
+	PPM* rem = new PPM(0);
+	PPM* q = new PPM(0);
+
+	while (!b->Zero()) {
+		q->Assign(a);
+		rem->Assign(0);
+		q->DivStd(b, rem);
+
+		a->Assign(b);
+		b->Assign(rem);
+	}
+
+	out_gcd->Assign(a);
+
+	delete rem;
+	delete q;
+}
+
+void fpi_rat_demo_old(void)
+{
+	char input[100];
+	int iter_cnt = 0;
+
+	printf("FPI-RAT DEMO\r\n");
+	printf("This demo explores fractional accuracy in computation using FPI-RAT iteration.\n");
+	printf("This forms some testing for a future paper\n");
+	printf("Investigating how RNS fractions can be more accurate.\n\n");
+
+	SPMF* arg1 = new SPMF(0);
+	arg1->AssignRatio(1, 3);
+	cout << "this is 1/3: " << arg1->Print(10) << endl << arg1->PPM::Print(DEC) << endl;
+	arg1->PrintDemo();
+	SPMF* arg2 = new SPMF(0);
+	arg2->AssignRatio(1, 7);
+	cout << "this is 1/7: " << arg2->Print(10) << endl << arg2->PPM::Print(DEC) << endl;
+	arg2->PrintDemo();
+	SPMF* x_rns = new SPMF(0);
+	SPMF* temp = new SPMF(0);
+	SPMF* temp2 = new SPMF(0);
+
+	cout << endl << "Let's do an iteration with x0 = 0!" << endl << endl;
+
+	PPM* ppm_result = new PPM(0);
+	PPM* ppm_remainder = new PPM(0);
+	PPM* ppm_quotient = new PPM(0);
+	SPMF* spmf_frac_range = new SPMF(0);
+	PPM* ppm_frac_range = new PPM(0);
+
+	PPM* ppm_exp_numerator = new PPM(3);
+	PPM* ppm_exp_denominator = new PPM(14);
+
+	spmf_frac_range->AssignUnitPM();
+	ppm_frac_range->PPM::Assign(spmf_frac_range);
+
+	PPM* one = new PPM(1);
+	PPM* gcd_result = new PPM(0);
+
+	MRN*  mrn = new MRN(x_rns);
+
+
+	printf("Enter 'q' to quit (Example: -12.345): ");
+//	scanf("%s", &input[0]);
+
+	while (strcmp(input, "q")) {
+
+		iter_cnt += 1;
+
+//		arg1->AssignFP(input);
+		cout << "arg1: " << arg1->PPM::Print(DEC) << endl; // arg1->Print(10) << endl << arg1->PPM::Print(DEC) << endl;
+		arg1->PrintDemo();
+
+//		printf("Enter operand B: ");
+//		scanf("%s", &input[0]);
+
+//		arg2->AssignFP(input);
+		cout << "arg2: " << arg2->Print(10) << endl << arg2->PPM::Print(DEC) << endl;
+		arg2->PrintDemo();
+
+		temp->Assign(arg1);
+		temp->MultStd(x_rns);
+		temp->Add(arg2);
+
+		x_rns->Assign(temp);			// this is the recurrence
+
+		printf("iteration: %d\n", iter_cnt);
+		cout << "temp: " << temp->Print(10) << endl << temp->PPM::Print(DEC) << endl;
+		temp->PrintDemo();
+
+		temp2->Assign(temp);
+
+		mrn->Assign2(temp);
+		cout << "mrn: ";
+		mrn->Print();
+
+		spmf_frac_range->AssignUnitPM();
+		ppm_frac_range->Assign(spmf_frac_range);
+//		ppm_frac_range->GetRange(ppm_frac_range, 8);
+		cout << endl << "fractional range is: " << ppm_frac_range->Print(10) << endl;
+		ppm_result->PPM::Assign(temp2);
+		cout <<         "result is:           " << ppm_result->Print(10) << endl;
+		gcd(ppm_frac_range, ppm_result, gcd_result);
+
+//		ppm_frac_range->Mult(ppm_result);
+//		ppm_frac_range->DivStd(ppm_exp_denominator, ppm_remainder);
+//		cout << endl << "division is: " << ppm_frac_range->Print(10) << endl;
+//		cout << "remainder is: " << ppm_remainder->Print(10) << endl;
+
+//		if (ppm_remainder->Zero()) {
+//			cout << "perfect fraction detected: " << endl;
+//		}
+
+		if (!gcd_result->IsEqual(one)) {
+			cout << "RNS fraction un-reduced: " << endl;
+			cout << "RNS fraction x/RF GCD: " << gcd_result->Print(10) << endl;
+		}
+
+		spmf_frac_range->AssignUnitPM();
+		ppm_frac_range->Assign(spmf_frac_range);
+		//		ppm_frac_range->GetRange(ppm_frac_range, 8);
+		ppm_result->PPM::Assign(temp2);
+		ppm_frac_range->Mult(ppm_exp_numerator);
+		ppm_frac_range->DivStd(ppm_exp_denominator, ppm_remainder);
+		cout << endl << "division is: " << ppm_frac_range->Print(10) << endl;
+		cout << "remainder is: " << ppm_remainder->Print(10) << endl;
+
+		if (ppm_remainder->Zero() && ppm_frac_range->IsEqual(ppm_result)) {
+			cout << "perfect result detected: " << endl;
+		}
+
+
+		printf("\n\n");
+		printf("Hit space bar?:\n");
+//		printf("Enter operand A or 'q' to quit (Example: -12.345): ");
+//		scanf("%s", &input[0]);
+		wait_key();
+
+	}
+
+	printf("FPI-RAT test completed\n");
+	wait_key();
+
+}
+
+
+enum FPIRAT_DetailLevel
+{
+	FPI_SUMMARY_ONLY = 0,
+	FPI_KEY_EVENTS = 1,
+	FPI_ITERATIONS = 2,
+	FPI_FULL_DETAIL = 3
+};
+
+struct FPIRAT_TestCase
+{
+	const char* name;
+	const char* category;
+
+	int a_num;
+	int a_den;
+
+	int b_num;
+	int b_den;
+
+	int x0_num;
+	int x0_den;
+
+	int fx_num;
+	int fx_den;
+
+	int max_iters;
+	bool expect_exact;
+};
+
+struct FPIRAT_Result
+{
+	const char* name;
+	const char* category;
+
+	bool exact_hit;
+	int  exact_iter;
+
+	bool locked;
+	int  lock_iter;
+
+	bool final_is_exact;
+
+	char final_value_str[128];
+	char reduced_ratio_str[128];
+};
+
+// ------------------------------------------------------------
+// Preserve-input gcd
+// ------------------------------------------------------------
+void gcd_ppm(const PPM* a_in, const PPM* b_in, PPM* out_gcd)
+{
+	PPM* a = new PPM(0);
+	PPM* b = new PPM(0);
+	PPM* q = new PPM(0);
+	PPM* rem = new PPM(0);
+
+	a->Assign((PPM*)a_in);
+	b->Assign((PPM*)b_in);
+
+	while (!b->Zero()) {
+		q->Assign(a);
+		rem->Assign(0);
+		q->DivStd(b, rem);
+
+		a->Assign(b);
+		b->Assign(rem);
+	}
+
+	out_gcd->Assign(a);
+
+	delete a;
+	delete b;
+	delete q;
+	delete rem;
+}
+
+void get_fractional_range(PPM* rf_out)
+{
+	SPMF* unit_pm = new SPMF(0);
+	unit_pm->AssignUnitPM();
+	rf_out->Assign(unit_pm);
+	delete unit_pm;
+}
+
+void set_spmf_ratio(SPMF* x, int num, int den)
+{
+	x->AssignRatio(num, den);
+}
+
+bool exact_expected_ratio(
+	const SPMF* current_value,
+	int expected_num,
+	int expected_den,
+	PPM* rf,
+	PPM* work,
+	PPM* remainder,
+	PPM* ppm_num,
+	PPM* ppm_den)
+{
+	work->Assign(rf);
+	ppm_num->Assign(expected_num);
+	ppm_den->Assign(expected_den);
+
+	work->Mult(ppm_num);
+	remainder->Assign(0);
+	work->DivStd(ppm_den, remainder);
+
+	if (!remainder->Zero())
+		return false;
+
+	PPM* current_ppm = new PPM(0);
+	current_ppm->Assign((PPM*)current_value);
+
+	bool match = work->IsEqual(current_ppm);
+	delete current_ppm;
+	return match;
+}
+
+//void get_reduced_fraction_strings(
+//	const SPMF* current_value,
+//	PPM* rf,
+//	char* ratio_buf,
+//	size_t ratio_buf_size)
+//{
+//	PPM* value_ppm = new PPM(0);
+//	PPM* g = new PPM(0);
+//	PPM* num = new PPM(0);
+//	PPM* den = new PPM(0);
+//	PPM* rem = new PPM(0);
+//
+//	value_ppm->Assign((PPM*)current_value);
+//	gcd_ppm(value_ppm, rf, g);
+//
+//	num->Assign(value_ppm);
+//	rem->Assign(0);
+//	num->DivStd(g, rem);
+//
+//	den->Assign(rf);
+//	rem->Assign(0);
+//	den->DivStd(g, rem);
+//
+////	snprintf(ratio_buf, ratio_buf_size, "%s / %s",
+////		num->Print(10), den->Print(10));
+//
+//	delete value_ppm;
+//	delete g;
+//	delete num;
+//	delete den;
+//	delete rem;
+//}
+
+void get_reduced_fraction_strings(
+	const SPMF* current_value,
+	PPM* rf,
+	char* ratio_buf,
+	size_t ratio_buf_size)
+{
+	PPM value_ppm(0);
+	PPM g(0);
+	PPM num(0);
+	PPM den(0);
+	PPM rem(0);
+
+	value_ppm.Assign((PPM*)current_value);
+	gcd_ppm(&value_ppm, rf, &g);
+
+	num.Assign(&value_ppm);
+	rem.Assign(0);
+	num.DivStd(&g, &rem);
+
+	den.Assign(rf);
+	rem.Assign(0);
+	den.DivStd(&g, &rem);
+
+	std::ostringstream oss;
+	oss << num.Print(10) << " / " << den.Print(10);
+
+	std::string s = oss.str();
+
+	if (ratio_buf_size > 0) {
+		std::strncpy(ratio_buf, s.c_str(), ratio_buf_size - 1);
+		ratio_buf[ratio_buf_size - 1] = '\0';
+	}
+}
+
+// ------------------------------------------------------------
+// Run one affine rational fixed-point iteration test
+// ------------------------------------------------------------
+void run_fpi_rat_test(
+	const FPIRAT_TestCase& tc,
+	FPIRAT_DetailLevel detail_level,
+	FPIRAT_Result* result)
+{
+	result->name = tc.name;
+	result->category = tc.category;
+	result->exact_hit = false;
+	result->exact_iter = -1;
+	result->locked = false;
+	result->lock_iter = -1;
+	result->final_is_exact = false;
+	result->final_value_str[0] = 0;
+	result->reduced_ratio_str[0] = 0;
+
+	if (detail_level >= FPI_KEY_EVENTS) {
+		cout << "\n============================================================\n";
+		cout << "FPI-RAT TEST: " << tc.name << endl;
+		cout << "Category: " << tc.category << endl;
+		cout << "Iteration: x_{k+1} = (" << tc.a_num << "/" << tc.a_den
+			<< ") x_k + (" << tc.b_num << "/" << tc.b_den << ")\n";
+		cout << "Initial value: " << tc.x0_num << "/" << tc.x0_den << endl;
+		cout << "Expected fixed point: " << tc.fx_num << "/" << tc.fx_den << endl;
+		cout << "Max iterations: " << tc.max_iters << endl;
+		cout << "============================================================\n";
+	}
+
+	SPMF* arg1 = new SPMF(0);
+	SPMF* arg2 = new SPMF(0);
+	SPMF* x_rns = new SPMF(0);
+	SPMF* temp = new SPMF(0);
+	SPMF* prev = new SPMF(0);
+
+	PPM* rf = new PPM(0);
+	PPM* work = new PPM(0);
+	PPM* rem = new PPM(0);
+	PPM* ppm_num = new PPM(0);
+	PPM* ppm_den = new PPM(0);
+
+	set_spmf_ratio(arg1, tc.a_num, tc.a_den);
+	set_spmf_ratio(arg2, tc.b_num, tc.b_den);
+	set_spmf_ratio(x_rns, tc.x0_num, tc.x0_den);
+
+	get_fractional_range(rf);
+
+	if (detail_level >= FPI_FULL_DETAIL) {
+		cout << "arg1 = " << arg1->Print(10) << endl;
+		cout << "arg2 = " << arg2->Print(10) << endl;
+		cout << "x0   = " << x_rns->Print(10) << endl;
+		cout << "RF   = " << rf->Print(10) << endl;
+
+		cout << "arg1 raw:\n" << arg1->PPM::Print(DEC) << endl;
+		arg1->PrintDemo();
+		cout << "arg2 raw:\n" << arg2->PPM::Print(DEC) << endl;
+		arg2->PrintDemo();
+	}
+
+	for (int iter = 1; iter <= tc.max_iters; iter++) {
+		prev->Assign(x_rns);
+
+		temp->Assign(arg1);
+		temp->MultStd(x_rns);
+		temp->Add(arg2);
+
+		x_rns->Assign(temp);
+
+		if (detail_level >= FPI_ITERATIONS) {
+			cout << "\niteration: " << iter << endl;
+			cout << "x_k = " << x_rns->Print(10) << endl;
+		}
+
+		if (!result->exact_hit &&
+			exact_expected_ratio(x_rns, tc.fx_num, tc.fx_den,
+				rf, work, rem, ppm_num, ppm_den))
+		{
+			result->exact_hit = true;
+			result->exact_iter = iter;
+
+			if (detail_level >= FPI_KEY_EVENTS) {
+				cout << "*** exact expected fixed point detected at iteration "
+					<< result->exact_iter << " ***" << endl;
+			}
+		}
+
+		if (!result->locked && x_rns->IsEqual(prev)) {
+			result->locked = true;
+			result->lock_iter = iter;
+
+			if (detail_level >= FPI_KEY_EVENTS) {
+				cout << "*** machine state locked at iteration "
+					<< result->lock_iter << " ***" << endl;
+			}
+		}
+
+		if (detail_level >= FPI_ITERATIONS) {
+			get_reduced_fraction_strings(x_rns, rf,
+				result->reduced_ratio_str, sizeof(result->reduced_ratio_str));
+			cout << "Reduced ratio x/RF = " << result->reduced_ratio_str << endl;
+		}
+
+		if (detail_level >= FPI_FULL_DETAIL) {
+			cout << "raw value:\n" << x_rns->PPM::Print(DEC) << endl;
+			x_rns->PrintDemo();
+		}
+
+		if (result->exact_hit && result->locked)
+			break;
+	}
+
+	snprintf(result->final_value_str, sizeof(result->final_value_str),
+		"%s", x_rns->Print(10));
+
+	get_reduced_fraction_strings(x_rns, rf,
+		result->reduced_ratio_str, sizeof(result->reduced_ratio_str));
+
+	result->final_is_exact = exact_expected_ratio(
+		x_rns, tc.fx_num, tc.fx_den, rf, work, rem, ppm_num, ppm_den);
+
+	if (detail_level >= FPI_KEY_EVENTS) {
+		cout << "\n---------------- SUMMARY ----------------\n";
+		if (result->exact_hit)
+			cout << "Exact expected ratio reached at iteration: "
+			<< result->exact_iter << endl;
+		else
+			cout << "Exact expected ratio NOT reached within iteration limit." << endl;
+
+		if (result->locked)
+			cout << "Machine-state lock detected at iteration: "
+			<< result->lock_iter << endl;
+		else
+			cout << "No machine-state lock detected within iteration limit." << endl;
+
+		cout << "Final x_k = " << result->final_value_str << endl;
+		cout << "Reduced ratio = " << result->reduced_ratio_str << endl;
+		cout << "-----------------------------------------\n";
+	}
+
+	delete arg1;
+	delete arg2;
+	delete x_rns;
+	delete temp;
+	delete prev;
+	delete rf;
+	delete work;
+	delete rem;
+	delete ppm_num;
+	delete ppm_den;
+}
+
+// ------------------------------------------------------------
+// Print compact final summary table
+// ------------------------------------------------------------
+void print_fpi_rat_summary_table(FPIRAT_Result* results, int count)
+{
+	cout << "\n\n============================================================\n";
+	cout << "FPI-RAT SUMMARY TABLE\n";
+	cout << "============================================================\n";
+
+	for (int i = 0; i < count; i++) {
+		cout << "[" << i + 1 << "] " << results[i].name << endl;
+		cout << "    Category        : " << results[i].category << endl;
+		cout << "    Exact hit       : " << (results[i].exact_hit ? "YES" : "NO");
+		if (results[i].exact_hit) cout << " @ iter " << results[i].exact_iter;
+		cout << endl;
+
+		cout << "    Machine lock    : " << (results[i].locked ? "YES" : "NO");
+		if (results[i].locked) cout << " @ iter " << results[i].lock_iter;
+		cout << endl;
+
+		cout << "    Final exact     : " << (results[i].final_is_exact ? "YES" : "NO") << endl;
+		cout << "    Final value     : " << results[i].final_value_str << endl;
+		cout << "    Reduced ratio   : " << results[i].reduced_ratio_str << endl;
+		cout << endl;
+	}
+}
+
+// ------------------------------------------------------------
+// Main multi-case demo
+// ------------------------------------------------------------
+void fpi_rat_demo(void)
+{
+//	FPIRAT_DetailLevel detail_level = FPI_SUMMARY_ONLY;
+	FPIRAT_DetailLevel detail_level = FPI_FULL_DETAIL;
+
+	printf("FPI-RAT DEMO\n");
+	printf("This demo explores affine rational fixed-point iteration\n");
+	printf("using RNS-APAL fractional arithmetic.\n\n");
+
+	FPIRAT_TestCase tests[] =
+	{
+		// --------------------------------------------------------
+		// Baseline exact-capture cases already working well
+		// --------------------------------------------------------
+		{ "a=1/3, b=1/5, x0=0, x*=3/10",      "baseline",         1,3,   1,5,   0,1,   3,10,   100, true },
+		{ "a=1/3, b=1/7, x0=0, x*=3/14",      "baseline",         1,3,   1,7,   0,1,   3,14,   100, true },
+		{ "a=2/5, b=1/7, x0=0, x*=5/21",      "baseline",         2,5,   1,7,   0,1,   5,21,   120, true },
+		{ "a=4/15, b=2/9, x0=0, x*=10/33",    "baseline",         4,15,  2,9,   0,1,  10,33,   140, true },
+
+		// --------------------------------------------------------
+		// Fixed-point seed tests
+		// --------------------------------------------------------
+		{ "a=1/3, b=1/5, x0=3/10",            "fixed-point seed", 1,3,   1,5,   3,10,  3,10,    20, true },
+		{ "a=1/3, b=1/7, x0=3/14",            "fixed-point seed", 1,3,   1,7,   3,14,  3,14,    20, true },
+		{ "a=2/5, b=1/7, x0=5/21",            "fixed-point seed", 2,5,   1,7,   5,21,  5,21,    20, true },
+		{ "a=4/15, b=2/9, x0=10/33",          "fixed-point seed", 4,15,  2,9,  10,33, 10,33,    20, true },
+
+		// --------------------------------------------------------
+		// Nearby-start tests
+		// --------------------------------------------------------
+		{ "a=1/3, b=1/5, x0=1/3",             "nearby start",     1,3,   1,5,   1,3,   3,10,   100, true },
+		{ "a=1/3, b=1/7, x0=1/7",             "nearby start",     1,3,   1,7,   1,7,   3,14,   100, true },
+		{ "a=2/5, b=1/7, x0=1/5",             "nearby start",     2,5,   1,7,   1,5,   5,21,   120, true },
+		{ "a=4/15, b=2/9, x0=1/9",            "nearby start",     4,15,  2,9,   1,9,  10,33,   140, true },
+
+		// --------------------------------------------------------
+		// Additional low-prime exact cases
+		// --------------------------------------------------------
+		{ "a=1/5, b=1/3, x0=0, x*=5/12",      "alt exact",        1,5,   1,3,   0,1,   5,12,   100, true },
+		{ "a=1/7, b=1/3, x0=0, x*=7/18",      "alt exact",        1,7,   1,3,   0,1,   7,18,   120, true },
+		{ "a=1/7, b=1/5, x0=0, x*=7/30",      "alt exact",        1,7,   1,5,   0,1,   7,30,   120, true },
+		{ "a=1/5, b=1/7, x0=0, x*=5/28",      "alt exact",        1,5,   1,7,   0,1,   5,28,   120, true },
+		{ "a=1/3, b=1/11, x0=0, x*=3/22",     "alt exact",        1,3,   1,11,  0,1,   3,22,   120, true },
+		{ "a=1/3, b=1/13, x0=0, x*=3/26",     "alt exact",        1,3,   1,13,  0,1,   3,26,   120, true },
+		{ "a=1/11, b=1/3, x0=0, x*=11/30",    "alt exact",        1,11,  1,3,   0,1,  11,30,   100, true },
+		{ "a=1/13, b=1/5, x0=0, x*=13/60",    "alt exact",        1,13,  1,5,   0,1,  13,60,   120, true },
+
+		// --------------------------------------------------------
+		// Mixed-prime denominator targets
+		// --------------------------------------------------------
+		{ "a=2/9, b=1/5, x0=0, x*=9/35",      "mixed prime",      2,9,   1,5,   0,1,   9,35,   140, true },
+		{ "a=3/10, b=1/7, x0=0, x*=10/49",    "mixed prime",      3,10,  1,7,   0,1,  10,49,   140, true },
+		{ "a=4/13, b=1/5, x0=0, x*=13/45",    "mixed prime",      4,13,  1,5,   0,1,  13,45,   140, true },
+		{ "a=5/14, b=1/3, x0=0, x*=14/27",    "mixed prime",      5,14,  1,3,   0,1,  14,27,   160, true },
+		{ "a=2/11, b=1/13, x0=0, x*=11/117",  "mixed prime",      2,11,  1,13,  0,1, 11,117,   160, true },
+		{ "a=3/13, b=1/11, x0=0, x*=13/110",  "mixed prime",      3,13,  1,11,  0,1, 13,110,   160, true },
+		{ "a=7/18, b=1/5, x0=0, x*=18/55",    "mixed prime",      7,18,  1,5,   0,1,  18,55,   180, true },
+
+		// --------------------------------------------------------
+		// Higher-prime support tests (11, 13, 17, 19)
+		// --------------------------------------------------------
+		{ "a=1/17, b=1/7, x0=0, x*=17/112",   "higher prime",     1,17,  1,7,   0,1, 17,112,   140, true },
+		{ "a=1/19, b=1/5, x0=0, x*=19/90",    "higher prime",     1,19,  1,5,   0,1,  19,90,   140, true },
+		{ "a=4/17, b=1/19, x0=0, x*=17/247",  "higher prime",     4,17,  1,19,  0,1, 17,247,   180, true },
+		{ "a=5/19, b=1/17, x0=0, x*=19/238",  "higher prime",     5,19,  1,17,  0,1, 19,238,   180, true },
+
+		// --------------------------------------------------------
+		// Power-of-two-friendly controls
+		// --------------------------------------------------------
+		{ "a=1/2, b=1/4, x0=0, x*=1/2",       "binary control",   1,2,   1,4,   0,1,   1,2,    140, true },
+		{ "a=1/4, b=1/8, x0=0, x*=1/6",       "binary contrast",  1,4,   1,8,   0,1,   1,6,    160, true },
+		{ "a=1/8, b=1/16, x0=0, x*=1/7",      "binary contrast",  1,8,   1,16,  0,1,   1,14,   180, true },
+		{ "a=1/2, b=1/7, x0=0, x*=2/7",       "binary contrast",  1,2,   1,7,   0,1,   2,7,    180, true }
+	};
+
+	const int num_tests = sizeof(tests) / sizeof(tests[0]);
+	FPIRAT_Result* results = new FPIRAT_Result[num_tests];
+
+	for (int i = 0; i < num_tests; i++) {
+		run_fpi_rat_test(tests[i], detail_level, &results[i]);
+	}
+
+	print_fpi_rat_summary_table(results, num_tests);
+
+	delete[] results;
+
+	printf("\nFPI-RAT test completed\n");
+	wait_key();
+}
 
 // fractional division by integer division method
 void fdiv_int_demo()
@@ -1975,6 +2580,7 @@ void print_menu(void)
 	printf("h. fractional inverse by int divide		ADVANCED\n");
 	printf("i. fractional divide by mult (Goldschmidt)	ADVANCED\n");
 	printf("j. fractional product summation			ADVANCED\n");
+	printf("k. FPI-RAT tests\n");
 
 }
 
@@ -2091,6 +2697,10 @@ char *s;
 				break;
 			case 'j':
 				fprod_sum();
+				wait_key();
+				break;
+			case 'k':
+				fpi_rat_demo();
 				wait_key();
 				break;
 			default:

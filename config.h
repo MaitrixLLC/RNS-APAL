@@ -17,7 +17,7 @@
 
 // **********************  SET THE NUMBER OF FRACTIONAL DIGITS USED IN THE RNS FRACTIONAL NUMBER SYSTEM *******************************//
 
-#define SPMF_FRACTION_DIGS	8		// I am keeping this for now because SPMF2_FRACTION_DIGS uses SPMF_FRACTION_DIGS. However, I see that SPMF2_FRACTION_DIGS is not used anywhere,
+//#define SPMF_FRACTION_DIGS	8		// I am keeping this for now because SPMF2_FRACTION_DIGS uses SPMF_FRACTION_DIGS. However, I see that SPMF2_FRACTION_DIGS is not used anywhere,
 									// so they can both be removed safely.
 
 									// In general, this value should be about one-fourth the total number of digits: NUM_PPM_DIGS
@@ -28,7 +28,7 @@
 
 // **************************** Set following appropriately to control how RNS Modulus are defined ************************************************* //
 
-//#define CUSTOM_MODULUS  0			// define as "0" for auto-generated RNS number format, otherwise define as "1" for user defined modulus
+//#define CUSTOM_MODULUS  1			// define as "0" for auto-generated RNS number format, otherwise define as "1" for user defined modulus
 									// for user defined modulus, Modulus values must be manually added to "Modulus[]" array in "config.cpp"
 									// for user defined modulus, make sure to define the custom ModPowers[] array in "config.cpp", and set the NUM_MODULUS_POWERS defined below
 

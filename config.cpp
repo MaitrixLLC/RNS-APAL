@@ -65,13 +65,15 @@ using namespace std;
 // *****************  Rez-9 Example Modulus ******************//
 // *****************  18 digit Rez-9  modulus = {121, 125, 169, 243, 256, 289, 343, 361, 457, 461, 463, 467, 479, 487, 491, 499, 503, 509}
 // set the config.h options below as shown:
-//#define NUM_PPM_DIGS 18
-//#define SPMF_FRACTION_DIGS 7
-//#define NUM_MODULUS_POWERS 8
-//#define CUSTOM_MODULUS 1
+#define NUM_PPM_DIGS 18
+#define SPMF_FRACTION_DIGS 7
+#define NUM_MODULUS_POWERS 8
+#define CUSTOM_MODULUS 1
 // set the modulus values as shown below in this file:
-int Modulus[18] =         {11,   5,  13,   3,   2,  17,   7,  19, 457, 461, 463, 467, 479, 487, 491, 499, 503, 509};		// 2's power is fifth position
-const int ModPowers[18] = {2,    3,   2,   5,   8,   2,   3,  2,  1,   1,   1,   1,   1,   1,   1,   1,   1,   1 };
+//int Modulus[18] =		 { 11,    5,   13,  3,   2,  17,   7,  19, 457, 461, 463, 467, 479, 487, 491, 499, 503, 509 };
+int Modulus[18] =         {11,    5,   13,  3,   2,  17,   7,  19, 457, 461, 463, 467, 479, 487, 491, 499, 503, 509};		// 2's power is fifth position
+//const int ModPowers[18] = {2,   3,   2,   5,   8,   2,   3,  2,  1,   1,   1,   1,   1,   1,   1,   1,   1,   1 };
+const int ModPowers[18] = { 2,    3,   2,   5,   8,   2,   3,  2,  1,   1,   1,   1,   1,   1,   1,   1,   1,   1 };
 
 
 // ******************  RNS TPU Example Modulus  ********************//

@@ -322,11 +322,21 @@ void MRN::Print(void)
 	for(int i=MRn.size()-1; i>=0; i--) {
 
 		if(MRn[i]->Skip) {
-			cout << "* ";
+			if (i > 0) {
+				cout << "*, ";
+			}
+			else {
+				cout << "*";
+			}
 		}
 		else {
 			//printf("%x ", MRn[i]->Digit);
-			cout << hex << nouppercase << MRn[i]->Digit;
+			if (i > 0) {
+				cout << hex << nouppercase << MRn[i]->Digit << ", ";
+			}
+			else {
+				cout << hex << nouppercase << MRn[i]->Digit;
+			}
 		}
 
 	}
