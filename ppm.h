@@ -238,6 +238,7 @@ public:
 
 	//	Some prototype library routines
 	void Sqrt(void);		// return the unsigned integer square root
+	void Factorial(int x);
 	
 	void Cfr(PPM *d, cfr_data *s);		// routine for testing CFR reduction
 	int AnyZero(void);					// routine to check if any zero exists in the PPM number, was created for CFR test procedure

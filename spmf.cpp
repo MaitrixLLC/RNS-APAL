@@ -522,7 +522,154 @@ SPMF *num = new SPMF(0);
 
 
 // print the SPMF using partial power modulus instead
+// this was correct by chatGPT
 double SPMF::PrintFPM(void)
+{
+	double val;
+	int is_negative = 0;
+
+	SPPM* num = new SPPM(0);
+
+	//
+	// Create intermediate copy of same format.
+	//
+	// IMPORTANT:
+	// Do not normalize/base-extend a negative complement-coded value
+	// directly.  First determine the sign, then convert to positive
+	// magnitude for decimal/float conversion.
+	//
+//	num->AssignPM(this);			// always copies to unsigned type
+	num->SPPM::Assign(this);
+
+	//
+	// Determine sign before normalization.
+	// CalcSign() uses the complement/range interpretation.
+	//
+	if (num->CalcSign())
+	{
+		is_negative = 1;
+
+		//
+		// Optional diagnostic consistency check.
+		//
+		if (num->GetSignValid() && (num->GetSignFlag() != NEGATIVE))
+		{
+			printf("(V)Sign magnitude error before PrintFPM magnitude conversion!\r\n");
+		}
+
+		//
+		// Convert to positive magnitude before Normalize().
+		//
+		// Prefer Abs() if it is the trusted signed-magnitude operation.
+		// If Abs() is not correct for SPMF fractional values, replace
+		// this with the correct complement-to-magnitude operation.
+		//
+		num->Negate();
+	}
+	else
+	{
+		is_negative = 0;
+
+		//
+		// Optional diagnostic consistency check.
+		//
+		if (num->GetSignValid() && (num->GetSignFlag() != POSITIVE))
+		{
+			printf("(V)Sign magnitude error before PrintFPM magnitude conversion!\r\n");
+		}
+	}
+
+	//
+	// Now the value should be non-negative.
+	// Normalize/base-extension is safe on positive magnitude.
+	//
+	num->Normalize();
+
+	if (num->GetSignValid())
+	{
+		printf("(V)");
+	}
+	else
+	{
+		printf("(I)");
+	}
+
+	if (is_negative)
+	{
+//		printf("-");		// printf routine already prints a negative sign
+	}
+	else
+	{
+		printf("+");
+	}
+
+	PPM* frac = new PPM(0);
+	PPM* one = new PPM(0);
+
+	SPMF::GetUnitPM(one);
+
+	num->ena_dplytrc = 0;
+
+	//
+	// num is now positive magnitude, so unsigned PPM division is safe.
+	//
+	num->PPM::DivStd(one, frac);
+
+	val = (double)(frac->Convert()) / (double)(one->Convert());
+	val += (double)(num->Convert());
+
+	if (is_negative)
+	{
+		val = -val;
+	}
+
+	delete one;
+	delete frac;
+	delete num;
+
+	return val;
+}
+
+string SPMF::PrintPM(int radix)
+{
+	SPMF temp(0);
+
+	//
+	// SPMF is signed.  Make a signed copy of this value.
+	//
+	// Use the signed SPPM assignment path so that SignFlag and
+	// SignValid are copied along with the residue digits.
+	//
+	temp.SPPM::Assign((SPPM*)this);
+
+	//
+	// Some operations, especially Add/Sub accumulation, may leave
+	// the cached sign flag invalid.  Recompute it from the actual
+	// complement/range representation before printing.
+	//
+	temp.CalcSetSign();
+
+	//
+	// The decimal conversion path should operate on a positive
+	// magnitude.  If the value is negative, convert the temporary
+	// copy to its absolute value and prepend '-'.
+	//
+	if (temp.GetSignFlag() == NEGATIVE)
+	{
+		temp.Abs();
+		temp.CalcSetSign();
+
+		return string("-") + temp.PrintAbsPM(radix);
+	}
+
+	//
+	// Positive or zero.
+	//
+	return temp.PrintAbsPM(radix);
+}
+
+// print the SPMF using partial power modulus instead
+double SPMF::PrintFPM_old(void)
 {
 double val;
 
@@ -2121,6 +2268,49 @@ void SPMF::Inverse(void)
 
 }
 
+// Assign this = round(Rf / denom), interpreted as the SPMF value 1/denom.
+//
+// This is the PPM-denominator version of AssignRatio(1, y), avoiding
+// __int64 limits for large factorial denominators.
+//
+// Positive denominator only.
+void SPMF::AssignInversePPM(PPM* denom)
+{
+	PPM* range = new PPM(0);
+	PPM* rem = new PPM(0);
+
+	if (denom->Zero()) {
+		printf("ERROR: AssignInversePPM divide by zero\n");
+		wait_key();
+		this->Assign(0LL);
+		delete rem;
+		delete range;
+		return;
+	}
+
+	// range = Rf
+	this->GetUnitPM(range);
+
+	// this = floor(Rf / denom), rem = Rf % denom
+	this->PPM::Assign(range);
+	this->ena_dplytrc = 0;
+	this->PPM::DivStd(denom, rem);
+
+	// Round-to-nearest using the same convention as DivPM:
+	// if 2*rem > denom, increment by one fractional click.
+	rem->Mult(2);
+
+	if (rem->Compare(denom)) {
+		this->PPM::Add(1);
+	}
+
+	this->SignFlag = POSITIVE;
+	this->SignValid = SIGN_VALID;
+
+	delete rem;
+	delete range;
+}
+
 /*
 
 	f = 2.0 - d;
@@ -3115,4 +3305,49 @@ __int64 BinaryPower;
 	
 	return(index);
 		
+}
+
+void SPMF::AssignTaylor_E()
+{
+	SPMF* sum = new SPMF(0);
+	SPMF* term = new SPMF(0);
+
+	PPM* fact = new PPM(1);
+
+	int n = 0;
+
+	sum->Assign(0LL);
+
+	while (1) {
+
+		if (n == 0 || n == 1) {
+			fact->Assign(1);
+		}
+		else {
+			fact->Mult(n);
+		}
+
+		term->AssignInversePPM(fact);
+
+		printf("n = %2d  ", n);
+		printf("n! = ");
+		cout << fact->Print10() << "  ";
+		cout << "term = " << term->PrintAbsPM(10) << endl;
+
+		if (term->Zero()) {
+			cout << "Rounded term reached zero at n = " << n << endl;
+			cout << "Last added nonzero term was n = " << (n - 1) << endl;
+			break;
+		}
+
+		sum->Add(term);
+
+		n += 1;
+	}
+
+	this->Assign(sum);
+
+	delete fact;
+	delete term;
+	delete sum;
 }

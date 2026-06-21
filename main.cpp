@@ -62,6 +62,16 @@ typedef char _TCHAR;
 #include "sppm.h"
 #include "spmf.h"
 #include "init.h"
+#include "RNSMathMenu.h"
+
+#include <vector>
+#include <iostream>
+#include <iomanip>
+#include <cstring>
+
+using std::cout;
+using std::endl;
+using std::vector;
 
 void print_modulus(PPM* ppm_base, int num_digs);			// this routine found in init.cpp
 
@@ -2011,6 +2021,181 @@ void fpi_rat_demo(void)
 	wait_key();
 }
 
+#include <iostream>
+#include <iomanip>
+#include <cstdint>
+
+using std::cout;
+using std::endl;
+
+
+#include <iostream>
+#include <iomanip>
+#include <cstdint>
+
+using std::cout;
+using std::endl;
+
+// ------------------------------------------------------------
+// Count legal first-digit pairs satisfying:
+//
+//     (x * y) mod m0 == target_digit
+//
+// where:
+//
+//     0 <= x < m0
+//     0 <= y < m0
+//
+// This is the test you described:
+//     x = 0..120
+//     y = 0..120
+//     modulo 121
+// ------------------------------------------------------------
+uint64_t count_first_digit_product_matches(int m0, int target_digit)
+{
+	uint64_t count = 0;
+
+	for (int x = 0; x < m0; ++x)
+	{
+		for (int y = 0; y < m0; ++y)
+		{
+			if (((x * y) % m0) == target_digit)
+			{
+				++count;
+			}
+		}
+	}
+
+	return count;
+}
+
+
+// ------------------------------------------------------------
+// Optional debug helper: print matching pairs.
+// For modulus 121 this is safe and useful.
+// ------------------------------------------------------------
+void print_first_digit_product_matches(
+	int m0,
+	int target_digit,
+	int max_to_print = 200)
+{
+	int printed = 0;
+
+	cout << "\nMatching digit pairs satisfying:" << endl;
+	cout << "  (x * y) mod " << m0 << " == " << target_digit << endl;
+
+	for (int x = 0; x < m0; ++x)
+	{
+		for (int y = 0; y < m0; ++y)
+		{
+			if (((x * y) % m0) == target_digit)
+			{
+				cout << "  x = " << std::setw(3) << x
+					<< ", y = " << std::setw(3) << y
+					<< "  ->  "
+					<< "(" << x << " * " << y << ") mod "
+					<< m0 << " = " << ((x * y) % m0)
+					<< endl;
+
+				++printed;
+
+				if (printed >= max_to_print)
+				{
+					cout << "  ... print limit reached ..." << endl;
+					return;
+				}
+			}
+		}
+	}
+
+	cout << "Total printed matches = " << printed << endl;
+}
+
+
+// ------------------------------------------------------------
+// Core test routine.
+// This assumes your ModTable has already been initialized by
+// your existing test-menu/application setup.
+// ------------------------------------------------------------
+void test_prime_product_first_digit()
+{
+	const uint64_t prime_a_u64 = 65521ULL;
+	const uint64_t prime_b_u64 = 65497ULL;
+	const uint64_t product_u64 = prime_a_u64 * prime_b_u64;
+
+	cout << "Prime A : " << prime_a_u64 << endl;
+	cout << "Prime B : " << prime_b_u64 << endl;
+	cout << "Product : " << product_u64 << endl;
+
+	PPM prime_a((__int64)prime_a_u64);
+	PPM prime_b((__int64)prime_b_u64);
+
+	PPM product(0);
+	product.Assign(&prime_a);
+	product.Mult(&prime_b);
+
+	cout << "\nPPM / RNS representation of Prime A:" << endl;
+	prime_a.PrintDemo();
+
+	cout << "\nPPM / RNS representation of Prime B:" << endl;
+	prime_b.PrintDemo();
+
+	cout << "\nPPM / RNS representation of Product A * B:" << endl;
+	product.PrintDemo();
+
+	// --------------------------------------------------------
+	// Important correction:
+	//
+	// GetModulus(power) returns the base modulus, e.g. 11.
+	// For the actual digit modulus shown in PrintDemo(), use
+	// the full power modulus, e.g. 11^2 = 121.
+	// --------------------------------------------------------
+	int base_power0 = 0;
+	int base_m0 = product.Rn[0]->GetModulus(base_power0);
+
+	int m0 = product.Rn[0]->GetFullPowMod();
+	int product_digit0 = product.Rn[0]->GetDigit();
+
+	cout << "\nFirst RNS digit product test:" << endl;
+	cout << "  first base modulus        = " << base_m0 << endl;
+	cout << "  first modulus power       = " << base_power0 << endl;
+	cout << "  first full digit modulus  = " << m0 << endl;
+	cout << "  product first digit d0    = " << product_digit0 << endl;
+
+	cout << "\nSanity check using actual prime digits:" << endl;
+	int a0 = prime_a.Rn[0]->GetDigit();
+	int b0 = prime_b.Rn[0]->GetDigit();
+
+	cout << "  prime A first digit a0    = " << a0 << endl;
+	cout << "  prime B first digit b0    = " << b0 << endl;
+	cout << "  (a0 * b0) mod m0          = "
+		<< ((a0 * b0) % m0) << endl;
+
+	uint64_t match_count =
+		count_first_digit_product_matches(m0, product_digit0);
+
+	cout << "\nOrdered legal digit-pair count:" << endl;
+	cout << "  count of (x,y) such that:" << endl;
+	cout << "    0 <= x < " << m0 << endl;
+	cout << "    0 <= y < " << m0 << endl;
+	cout << "    (x * y) mod " << m0
+		<< " == " << product_digit0 << endl;
+	cout << "  count = " << match_count << endl;
+
+	print_first_digit_product_matches(m0, product_digit0, 200);
+}
+
+// try some factoring combinations by attempting modular combinations, then mixed-radix conversions
+void factor_tests()
+{
+
+	test_prime_product_first_digit();
+
+	printf("\nFactor test completed\n");
+	wait_key();
+
+}
+
 // fractional division by integer division method
 void fdiv_int_demo()
 {
@@ -2554,6 +2739,585 @@ SPMF *final = new SPMF(0);
 }
 
 
+
+// ------------------------------------------------------------
+// Candidate root stored in RNS/PPM form.
+// This avoids carrying the mixed-radix candidate as a native int.
+// ------------------------------------------------------------
+struct RNSRootCandidate
+{
+	PPM* root;
+};
+
+// ------------------------------------------------------------
+// positive_mod_int
+// ------------------------------------------------------------
+static int positive_mod_int(int a, int m)
+{
+	int r = a % m;
+	if (r < 0) r += m;
+	return r;
+}
+
+// ------------------------------------------------------------
+// extended_gcd_int / modular_inverse_int
+//
+// Used only for one digit modulus arithmetic:
+//
+//     inv(Mk mod mi) mod mi
+//
+// The candidate root itself remains in PPM form.
+// ------------------------------------------------------------
+static int extended_gcd_int(int a, int b, int* x, int* y)
+{
+	if (b == 0) {
+		*x = 1;
+		*y = 0;
+		return a;
+	}
+
+	int x1 = 0;
+	int y1 = 0;
+	int g = extended_gcd_int(b, a % b, &x1, &y1);
+
+	*x = y1;
+	*y = x1 - (a / b) * y1;
+
+	return g;
+}
+
+static bool modular_inverse_int(int a, int m, int* inv_out)
+{
+	int x = 0;
+	int y = 0;
+
+	int g = extended_gcd_int(a, m, &x, &y);
+
+	if (g != 1)
+		return false;
+
+	*inv_out = positive_mod_int(x, m);
+	return true;
+}
+
+// ------------------------------------------------------------
+// get_modular_square_roots
+//
+// Digit-local brute force:
+//
+//     r^2 == target_digit mod full_modulus
+//
+// This is still native arithmetic, but only over one RNS digit.
+// ------------------------------------------------------------
+static vector<int> get_modular_square_roots(int full_modulus, int target_digit)
+{
+	vector<int> roots;
+
+	for (int r = 0; r < full_modulus; ++r)
+	{
+		int sq = (int)(((long long)r * (long long)r) % full_modulus);
+
+		if (sq == target_digit)
+			roots.push_back(r);
+	}
+
+	return roots;
+}
+
+// ------------------------------------------------------------
+// ppm_range_square_exceeds_N
+//
+// Tests:
+//
+//     Mk^2 > N
+//
+// entirely using PPM arithmetic and PPM::Compare().
+// ------------------------------------------------------------
+static bool ppm_range_square_exceeds_N(PPM* Mk, PPM* N)
+{
+	PPM Mk_sq(0);
+
+	Mk_sq.Assign(Mk);
+	Mk_sq.Mult(Mk);
+
+	return Mk_sq.Compare(N) ? true : false;
+}
+
+// ------------------------------------------------------------
+// select_root_digit_count_rns
+//
+// Select smallest k such that:
+//
+//     Mk^2 > N
+//
+// where:
+//
+//     Mk = product of first k full-power digit moduli.
+//
+// Mk_out receives the final selected range product in PPM form.
+// ------------------------------------------------------------
+static int select_root_digit_count_rns(PPM* N, PPM* Mk_out)
+{
+	PPM temp_mod(0);
+	PPM Mk(1);
+
+	for (int i = 0; i < N->NumDigits; ++i)
+	{
+		int mi = N->Rn[i]->GetFullPowMod();
+
+		temp_mod.Assign(mi);
+		Mk.Mult(&temp_mod);
+
+		if (ppm_range_square_exceeds_N(&Mk, N))
+		{
+			Mk_out->Assign(&Mk);
+			return i + 1;
+		}
+	}
+
+	Mk_out->Assign(&Mk);
+	return N->NumDigits;
+}
+
+// ------------------------------------------------------------
+// square_digit_matches
+//
+// Tests one digit:
+//
+//     root_digit^2 mod mi == N_digit
+// ------------------------------------------------------------
+static bool square_digit_matches(PPM* root, PPM* N, int digit_index)
+{
+	int mi = N->Rn[digit_index]->GetFullPowMod();
+	int ri = root->Rn[digit_index]->GetDigit();
+	int ni = N->Rn[digit_index]->GetDigit();
+
+	int sqi = (int)(((long long)ri * (long long)ri) % mi);
+
+	return (sqi == ni);
+}
+
+// ------------------------------------------------------------
+// verify_candidate_square_by_digits_rns
+//
+// Candidate root is already a PPM value. Its remaining digits
+// are therefore present by normal RNS assignment/arithmetic.
+// This checks:
+//
+//     root_i^2 mod m_i == N_i
+//
+// for all full-power digit moduli.
+// ------------------------------------------------------------
+static bool verify_candidate_square_by_digits_rns(
+	PPM* root,
+	PPM* N,
+	bool verbose)
+{
+	if (verbose) {
+		cout << "\nTesting candidate root:" << endl;
+		cout << "  R = " << root->Print(DEC) << endl;
+		root->PrintDemo();
+	}
+
+	for (int i = 0; i < N->NumDigits; ++i)
+	{
+		int mi = N->Rn[i]->GetFullPowMod();
+		int ri = root->Rn[i]->GetDigit();
+		int ni = N->Rn[i]->GetDigit();
+
+		int sqi = (int)(((long long)ri * (long long)ri) % mi);
+
+		if (sqi != ni)
+		{
+			if (verbose) {
+				cout << "  FAIL digit[" << i << "]"
+					<< " modulus=" << mi
+					<< " root_digit=" << ri
+					<< " square_digit=" << sqi
+					<< " target_digit=" << ni
+					<< endl;
+			}
+
+			return false;
+		}
+	}
+
+	if (verbose) {
+		cout << "  PASS: all RNS digits satisfy root_digit^2 == N_digit." << endl;
+	}
+
+	return true;
+}
+
+// ------------------------------------------------------------
+// exact_square_confirm_rns
+//
+// Debug confirmation:
+//
+//     root * root == N
+//
+// using PPM multiplication and IsEqual.
+// ------------------------------------------------------------
+static bool exact_square_confirm_rns(PPM* root, PPM* N, bool verbose)
+{
+	PPM square(0);
+
+	square.Assign(root);
+	square.Mult(root);
+
+	bool match = square.IsEqual(N) ? true : false;
+
+	if (verbose) {
+		cout << "  root^2 = " << square.Print(DEC) << endl;
+		cout << "  exact PPM square compare = "
+			<< (match ? "MATCH" : "NO MATCH") << endl;
+	}
+
+	return match;
+}
+
+// ------------------------------------------------------------
+// delete_candidate_vector
+// ------------------------------------------------------------
+static void delete_candidate_vector(vector<RNSRootCandidate>& candidates)
+{
+	for (size_t i = 0; i < candidates.size(); ++i)
+	{
+		delete candidates[i].root;
+		candidates[i].root = NULL;
+	}
+
+	candidates.clear();
+}
+
+// ------------------------------------------------------------
+// run_rns_perfect_square_test
+//
+// More RNS-native version:
+//
+//   1. N is PPM.
+//   2. Full-power digit moduli are extracted from N->Rn[i].
+//   3. Local modular roots are found per digit.
+//   4. k is selected using PPM range arithmetic:
+//
+//          Mk^2 > N
+//
+//   5. Candidate roots are held as PPM values.
+//   6. Mixed-radix-style extension is performed as:
+//
+//          R_next = R_old + alpha * Mk
+//
+//      where alpha is chosen to force the next digit.
+//   7. Full verification is digit-square agreement across all RNS digits.
+// ------------------------------------------------------------
+static bool run_rns_perfect_square_test(PPM* N)
+{
+	cout << "\n============================================================" << endl;
+	cout << "RNS PERFECT SQUARE TEST" << endl;
+	cout << "============================================================" << endl;
+
+	cout << "Input N = " << N->Print(DEC) << endl;
+	cout << "\nN in RNS:" << endl;
+	N->PrintDemo();
+
+	// --------------------------------------------------------
+	// Step 1: local modular square-root screening.
+	// --------------------------------------------------------
+	vector< vector<int> > all_roots;
+	all_roots.resize(N->NumDigits);
+
+	cout << "\nLocal modular square-root screening:" << endl;
+
+	for (int i = 0; i < N->NumDigits; ++i)
+	{
+		int mi = N->Rn[i]->GetFullPowMod();
+		int ni = N->Rn[i]->GetDigit();
+
+		all_roots[i] = get_modular_square_roots(mi, ni);
+
+		cout << "  digit[" << std::setw(2) << i << "]"
+			<< " modulus=" << std::setw(6) << mi
+			<< " N_digit=" << std::setw(6) << ni
+			<< " roots=" << std::setw(3) << all_roots[i].size();
+
+		if (!all_roots[i].empty()) {
+			cout << "  { ";
+			for (size_t r = 0; r < all_roots[i].size(); ++r) {
+				cout << all_roots[i][r];
+				if (r + 1 < all_roots[i].size()) cout << ", ";
+			}
+			cout << " }";
+		}
+
+		cout << endl;
+
+		if (all_roots[i].empty())
+		{
+			cout << "\nRESULT: N is NOT a perfect square." << endl;
+			cout << "Reason: digit[" << i << "] has no modular square root." << endl;
+			return false;
+		}
+	}
+
+	// --------------------------------------------------------
+	// Step 2: select k using RNS arithmetic.
+	// --------------------------------------------------------
+	PPM Mk_selected(0);
+	int k = select_root_digit_count_rns(N, &Mk_selected);
+
+	cout << "\nRoot candidate digit count selected up front:" << endl;
+	cout << "  k  = " << k << endl;
+	cout << "  Mk = " << Mk_selected.Print(DEC) << endl;
+	cout << "  condition used: Mk^2 > N" << endl;
+
+	// --------------------------------------------------------
+	// Step 3: initialize candidate roots from digit[0].
+	//
+	// Each candidate root is held as a PPM value.
+	// Assign(root_digit) automatically generates all RNS residues
+	// of that small initial value.
+	// --------------------------------------------------------
+	vector<RNSRootCandidate> candidates;
+
+	for (size_t r = 0; r < all_roots[0].size(); ++r)
+	{
+		RNSRootCandidate c;
+		c.root = new PPM((__int64)all_roots[0][r]);
+		candidates.push_back(c);
+	}
+
+	cout << "\nInitial candidate roots from digit[0]: "
+		<< candidates.size() << endl;
+
+	// --------------------------------------------------------
+	// Mk_prev tracks product of completed digit moduli.
+	//
+	// Initially after digit[0]:
+	//
+	//     Mk_prev = m0
+	//
+	// For each next digit:
+	//
+	//     R_next = R_old + alpha * Mk_prev
+	//
+	// where alpha is selected so that R_next has the desired
+	// next digit root modulo m_i.
+	// --------------------------------------------------------
+	PPM Mk_prev(1);
+	PPM temp_mod(0);
+
+	temp_mod.Assign(N->Rn[0]->GetFullPowMod());
+	Mk_prev.Mult(&temp_mod);
+
+	for (int digit = 1; digit < k; ++digit)
+	{
+		int mi = N->Rn[digit]->GetFullPowMod();
+
+		vector<RNSRootCandidate> next_candidates;
+
+		for (size_t c = 0; c < candidates.size(); ++c)
+		{
+			PPM* R_old = candidates[c].root;
+
+			int R_digit = R_old->Rn[digit]->GetDigit();
+			int Mk_digit = Mk_prev.Rn[digit]->GetDigit();
+
+			int inv_Mk_digit = 0;
+
+			if (!modular_inverse_int(Mk_digit, mi, &inv_Mk_digit))
+			{
+				cout << "ERROR: Mk is not invertible modulo digit[" << digit << "]" << endl;
+				cout << "This should not occur if the moduli are pairwise coprime." << endl;
+				continue;
+			}
+
+			for (size_t r = 0; r < all_roots[digit].size(); ++r)
+			{
+				int desired_digit = all_roots[digit][r];
+
+				int delta = positive_mod_int(desired_digit - R_digit, mi);
+
+				int alpha =
+					(int)(((long long)delta * (long long)inv_Mk_digit) % mi);
+
+				PPM increment(0);
+				increment.Assign(&Mk_prev);
+				increment.Mult(alpha);
+
+				RNSRootCandidate next;
+				next.root = new PPM(0);
+				next.root->Assign(R_old);
+				next.root->Add(&increment);
+
+				// Optional internal check on the new digit.
+				if (!square_digit_matches(next.root, N, digit))
+				{
+					cout << "WARNING: constructed candidate failed digit["
+						<< digit << "] square check." << endl;
+					delete next.root;
+					next.root = NULL;
+				}
+				else
+				{
+					next_candidates.push_back(next);
+				}
+			}
+		}
+
+		delete_candidate_vector(candidates);
+		candidates.swap(next_candidates);
+
+		cout << "  after combining digit[" << digit << "]"
+			<< " modulus=" << mi
+			<< " candidate count=" << candidates.size()
+			<< endl;
+
+		// Advance Mk_prev *= mi using PPM arithmetic.
+		temp_mod.Assign(mi);
+		Mk_prev.Mult(&temp_mod);
+	}
+
+	// --------------------------------------------------------
+	// Step 4: full base-extension/digit-square verification.
+	// Since each candidate is a normal PPM value, all remaining
+	// RNS digits are already available by inspection.
+	// --------------------------------------------------------
+	cout << "\nFull RNS digit-square verification:" << endl;
+
+	int solution_count = 0;
+
+	for (size_t c = 0; c < candidates.size(); ++c)
+	{
+		PPM* R = candidates[c].root;
+
+		bool digit_pass = verify_candidate_square_by_digits_rns(R, N, false);
+
+		if (digit_pass)
+		{
+			cout << "\nCandidate passed full RNS digit-square test:" << endl;
+			cout << "  R = " << R->Print(DEC) << endl;
+
+			verify_candidate_square_by_digits_rns(R, N, true);
+
+			// Debug confirmation. This is still RNS-domain PPM arithmetic.
+			bool exact_match = exact_square_confirm_rns(R, N, true);
+
+			if (exact_match)
+			{
+				cout << "\nRESULT: N is a perfect square." << endl;
+				cout << "  sqrt(N) = " << R->Print(DEC) << endl;
+				solution_count++;
+			}
+			else
+			{
+				cout << "\nWARNING: digit test passed, but exact PPM square compare failed." << endl;
+				cout << "This suggests wraparound or insufficient redundant range." << endl;
+			}
+		}
+	}
+
+	delete_candidate_vector(candidates);
+
+	if (solution_count == 0)
+	{
+		cout << "\nRESULT: N is NOT a perfect square." << endl;
+		cout << "Reason: local roots existed, but no assembled RNS candidate root passed full verification." << endl;
+		return false;
+	}
+
+	cout << "\nTotal exact square roots found: " << solution_count << endl;
+	return true;
+}
+
+// ------------------------------------------------------------
+// Top-level demo call for menu key 'm'
+// ------------------------------------------------------------
+void perfect_square_rns_demo(void)
+{
+	char input[256];
+
+	printf("RNS PERFECT SQUARE DETECTION DEMO\n");
+	printf("This demo tests whether an unsigned RNS integer is a perfect square.\n");
+	printf("It uses full-power digit moduli and keeps candidate roots in PPM form.\n");
+	printf("Enter an unsigned integer N or 'q' to quit.\n\n");
+
+	printf("Enter N: ");
+	scanf("%s", input);
+
+	while (strcmp(input, "q"))
+	{
+		PPM* N = new PPM(0);
+
+		while (!N->Assign(input))
+		{
+			printf("ERROR: Incorrect RNS string format for conversion ... press any key\n");
+			wait_key();
+
+			printf("Enter unsigned integer N or 'q' to quit: ");
+			scanf("%s", input);
+
+			if (!strcmp(input, "q")) {
+				delete N;
+				return;
+			}
+		}
+
+		run_rns_perfect_square_test(N);
+
+		delete N;
+
+		printf("\nTry another perfect-square test?\n");
+		printf("Enter N or 'q' to quit: ");
+		scanf("%s", input);
+	}
+
+	printf("RNS perfect-square demo terminated\n");
+	wait_key();
+}
+
+// Simple menu-callable test routine for Taylor-series e.
+//
+// Requires:
+//   void SPMF::AssignTaylor_E();
+//
+// Assumes AssignTaylor_E() computes:
+//   e = sum 1/n!
+// and terminates when the rounded term becomes zero.
+
+void menu_test_taylor_e()
+{
+	SPMF* e_val = new SPMF(0);
+
+	printf("\n");
+	printf("========================================\n");
+	printf(" RNS-APAL Taylor-Series Test: e\n");
+	printf("========================================\n");
+
+	e_val->AssignTaylor_E();
+
+	printf("\n");
+	printf("e computed in SPMF current fractional basis:\n");
+
+	// More complete decimal-style print using the PM fractional range.
+	std::cout << e_val->PrintAbsPM(10) << std::endl;
+
+	// Quick floating display.  Useful for sanity checking only.
+	// This converts through double precision, so do not use it as the
+	// authoritative RNS-APAL result.
+	printf("\n");
+	printf("Double display estimate:\n");
+	printf("%.20f\n", e_val->PrintFPM());
+
+	printf("\n");
+	printf("Reference double e:\n");
+	printf("%.20f\n", exp(1.0));
+
+	printf("========================================\n\n");
+
+	delete e_val;
+}
+
+
 // print menu for RNS demo example
 void print_menu(void)
 {
@@ -2581,6 +3345,10 @@ void print_menu(void)
 	printf("i. fractional divide by mult (Goldschmidt)	ADVANCED\n");
 	printf("j. fractional product summation			ADVANCED\n");
 	printf("k. FPI-RAT tests\n");
+	printf("l. Factor tests\n");
+	printf("m. Perfect square test demo\n");
+	printf("n  Exponent e computation using Taylor series\n");
+	printf("o. RNSMath transcendental function test menu\n");
 
 }
 
@@ -2701,6 +3469,23 @@ char *s;
 				break;
 			case 'k':
 				fpi_rat_demo();
+				wait_key();
+				break;
+			case 'l':
+				factor_tests();
+				wait_key();
+				break;
+			case 'm':
+				perfect_square_rns_demo();
+				wait_key();
+				break;
+			case 'n':
+				menu_test_taylor_e();
+				wait_key();
+				break;
+			case 'o':
+				cls();
+				rns_math_tests();
 				wait_key();
 				break;
 			default:

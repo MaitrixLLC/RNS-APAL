@@ -45,6 +45,12 @@
     <ClCompile Include="init.cpp">
       <Filter>Source Files\RNS Modules</Filter>
     </ClCompile>
+    <ClCompile Include="RNSMath.cpp">
+      <Filter>Source Files\RNS Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="RNSMathMenu.cpp">
+      <Filter>Source Files\RNS Modules</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="targetver.h">
@@ -72,6 +78,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="init.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="RNSMath.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="RNSMathMenu.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

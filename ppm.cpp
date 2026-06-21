@@ -2486,6 +2486,17 @@ void PPM::GetMultRange(PPM *val)
 
 }
 
+// Computes this = n! in PPM integer format.
+// Stays entirely in the RNS-APAL / PPM integer domain.
+void PPM::Factorial(int n)
+{
+	this->Assign(1);
+
+	for (int i = 2; i <= n; i++) {
+		this->Mult(i);
+	}
+}
+
 // adds any integer x, usually used to add digit values up to largest PPM digit modulus
 void PPM::Add(int x)
 {

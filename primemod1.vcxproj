@@ -99,6 +99,8 @@
     <ClCompile Include="mrn.cpp" />
     <ClCompile Include="ppm.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="RNSMath.cpp" />
+    <ClCompile Include="RNSMathMenu.cpp" />
     <ClCompile Include="spmf.cpp" />
     <ClCompile Include="sppm.cpp" />
     <ClCompile Include="stdafx.cpp">
@@ -110,6 +112,8 @@
   <ItemGroup>
     <ClInclude Include="config.h" />
     <ClInclude Include="init.h" />
+    <ClInclude Include="RNSMath.h" />
+    <ClInclude Include="RNSMathMenu.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="mrn.h" />
     <ClInclude Include="ppm.h" />

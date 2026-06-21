@@ -30,9 +30,11 @@ public:
 
 	string Prints(void);			// print native SPMF with fractional point!
 	string Prints(int radix);		// print native SPMF with fractional point using radix argument!
-	double PrintFPM(void);			// returns a standard floating point number, calculated using std. FP, supports partial modulus
+	double PrintFPM_old(void);		// returns a standard floating point number, calculated using std. FP, supports partial modulus
+	double PrintFPM(void);			// returns a standard floating point number, same as above, but revised by chatGPT
 	string Print(int radix);		// standard string output fractional print
 	string PrintAbsPM(int radix);	// cleaned up version of PrintPM2(int r);
+	string PrintPM(int radix);      // signed-aware partial-modulus fractional print
 
 	void AssignInverse(__int64 x);		// assigns the inverse of x, i.e., 1/x
 	
@@ -41,6 +43,7 @@ public:
 	void AssignUnitPM(void);		// assigns the SPMF a unit value (1.0)  (shortcut routine)
 	int AssignFP(string fval);		// Assignment takes arbitrary string as input with a single decimal point and optional +/- prefix, returns true if successful
 	void AssignRatio(__int64 x, __int64 y);  // Assignment of a fixed fraction as a ratio of two long long integers.  x value times fractional range cannot exceed underlying PPM number system
+
 
 									// NOTE that Add(PPM) and Mult(PPM) are still defined in base class
 	void Add1(__int64 x);				// NEED TO DERIVE THESE BASE CLASSES THE RIGHT WAY! add a whole unit to the FRN
@@ -72,6 +75,8 @@ public:
 	void Div(SPMF *arg);				// prototype fractional divide by integer
 	void DivPM(SPMF *arg);				// (experimental) prototype fractional divide with power modulus by int divide
 	void Inverse(void);					// calculate the inverse of the PMF number
+	void AssignInversePPM(PPM* denom);  // prototype for creating an SPMF inverse using a PPM integer
+
 
 	int scale(SPMF *arg);			// test routine to scale a number D, such that 0 < D < 1.0  (experimental)
 									// returns 0 if no scale, else -1 for each "left shift", or +1 for each "right shift"
@@ -87,7 +92,7 @@ public:
 											// of operand, and don't let the divide resut in a number too large to be contained in range of operand as simple rule.
 											// we don't prove the required range requirements here, but suffice to say there is no overflow or underflow detection in this
 											// algorithm at this time.  This could be added later as a problem for the student!	 
-	void GoldDivAbs(SPMF *arg);			// prototype Goldschmidt division routine, assumes the divisor is properly scaled for now, only positive numbers
+	void GoldDivAbs(SPMF *arg);			    // prototype Goldschmidt division routine, assumes the divisor is properly scaled for now, only positive numbers
 	void GoldDivAbsDebug(SPMF *arg);		// same or similar as above, but with printfs for testing
 	void GoldDivAbs2(SPMF *arg);			// preliminary testing of Goldschmidt algorithm variations in persuit of more efficeint routines
 
@@ -104,6 +109,10 @@ public:
 
 	int GetCurFractPos(void);		// returns the fraction point position
 	int GetNormFractPos(void);		// returns the normal fraction point position
+
+	// transcedental, exponential and trigonometric functions here
+
+	void AssignTaylor_E(void);		// assigns the value of 'e' using the Taylor expansion
 
 };
 
