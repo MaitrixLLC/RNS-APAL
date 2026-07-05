@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import gcd, prod
+from math import prod
 from typing import Iterable
+
+from .utils import is_pairwise_coprime
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,11 +50,8 @@ class RNSNumberSystem:
         if self.name is not None and not isinstance(self.name, str):
             raise TypeError("name must be a string or None")
 
-        full_moduli = self.full_moduli
-        for left_index, left in enumerate(full_moduli):
-            for right in full_moduli[left_index + 1 :]:
-                if gcd(left, right) != 1:
-                    raise ValueError("full digit moduli must be pairwise coprime")
+        if not is_pairwise_coprime(self.full_moduli):
+            raise ValueError("full digit moduli must be pairwise coprime")
 
     @property
     def num_digits(self) -> int:

@@ -5,6 +5,12 @@ RNS-PYPAL is a Python port of the original C++ RNS-APAL residue number system li
 
 This document describes the intended architecture. The C++ headers and implementations are essential reference evidence, but they are not assumed to be defect-free. Stable active behavior, mathematical invariants, and explicit equivalence tests determine what the Python library should preserve.
 
+The original C++ RNS-APAL source and Visual Studio project files are kept under
+`cpp_ref/`. Future source analysis should look there first, for example
+`cpp_ref/ppm.cpp`, `cpp_ref/ppm.h`, `cpp_ref/mrn.cpp`, `cpp_ref/sppm.cpp`, and
+`cpp_ref/spmf.cpp`. The root of the repository is reserved for the Python port,
+tests, documentation, notebooks, and project tooling.
+
 ## Project goals
 
 - Provide an importable Python library for residue number system (RNS) arithmetic.
@@ -30,12 +36,50 @@ The recommended development environment is:
 - `pytest` for equivalence and regression tests
 - `ruff` for lightweight linting
 - optionally `ipython` for interactive exploration
+- optionally `jupyterlab` and `ipykernel` for web-based notebooks
 
 From an activated virtual environment, the ordinary verification commands are:
 
 ```powershell
 python -m pytest
 python -m ruff check rns_pypal tests
+```
+
+For notebook-based exploration, install the optional exploration tools and
+launch JupyterLab from the repository root:
+
+```powershell
+python -m pip install ipython ipykernel jupyterlab
+python -m jupyter lab
+```
+
+The starter notebook is `notebooks/rns_pypal_scratch.ipynb`. It imports the
+local library, runs the current test suite, and shows basic `PPM` native/demo
+formatting. Notebook output should remain scratch state; committed notebooks
+should generally avoid saved execution noise unless the output is intentionally
+part of documentation.
+
+If a notebook cell is copied into another notebook, it should locate the
+repository root before importing local code:
+
+```python
+from pathlib import Path
+import sys
+import pytest
+
+def find_repo_root(start=None):
+    path = Path.cwd() if start is None else Path(start).resolve()
+    for candidate in (path, *path.parents):
+        if (candidate / "rns_pypal").exists() and (candidate / "tests").exists():
+            return candidate
+    raise RuntimeError("Could not find the RNS-PYPAL repository root")
+
+repo_root = find_repo_root()
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
+
+result = pytest.main([str(repo_root / "tests")])
+assert result == 0
 ```
 
 The current `pytest` configuration runs the `tests` directory quietly and
@@ -127,6 +171,26 @@ RNS-APAL performs the forward conversion from least-significant mixed-radix posi
 
 The division in step 3 is performed independently in the remaining residue channels. If the consumed radix is `m` and a remaining channel has modulus `n`, division by `m` is multiplication by `m`'s modular inverse modulo `n`. Pairwise-coprime moduli make that inverse available. This per-channel inverse multiplication is the engine of the mixed-radix decomposition.
 
+The Python port represents this with two related tools:
+
+- `MixedRadixDecomposer` is the streaming helper. It owns a working copy of a
+  `PPM`, produces one `MRDigit` at a time, invalidates the consumed RNS digit by
+  marking it skipped, and updates the remaining residue channels through
+  inverse modular multiplication. This is the intended primitive for compare,
+  rounding, division, and any operation that should evaluate and discard each
+  mixed-radix digit.
+- `MRN` is the materialized mixed-radix class. It consumes the same streaming
+  helper but stores every produced `MRDigit` for demonstration, debugging, and
+  algorithms that genuinely need a retained mixed-radix representation.
+
+Both forms use the order of the `PPM.rn` digit list. That list is an ordered
+representation of the declared RNS system even though the residue digits are not
+themselves positional values. Mixed-radix conversion therefore depends on this
+declared order: digit index zero is consumed first, then index one, and so on.
+Changing the digit order changes the mixed-radix number system being used. This
+will be especially important for fixed-point values, where fractional RNS digits
+must be converted before integer-position digits.
+
 ### Streaming mixed-radix processing
 
 A central RNS-APAL technique is that the complete mixed-radix number often does not need to be stored. Each digit can be evaluated as soon as it is produced and then discarded. Only the reduced residue state and a small amount of operation-specific state need to continue to the next position.
@@ -210,6 +274,12 @@ Loading a definition must validate at least:
 - a fractional digit count from zero through the total digit count; and
 - pairwise coprimality of the resulting full digit moduli.
 
+The same validation applies when constructing `RNSNumberSystem`
+programmatically. The primitive helper `are_coprime(a, b)` checks two values,
+and `is_pairwise_coprime(values)` checks an entire modulus set. These helpers
+operate on effective full digit moduli, such as `base ** power`, because those
+are the actual RNS channels that must be pairwise coprime.
+
 System identity is determined canonically from the ordered normalized moduli, powers, and fractional digit count. The descriptive name and arithmetic policy are excluded. A stable fingerprint may be exposed for diagnostics and reproducibility, but equality must not rely only on a hash value.
 
 Generated systems can be added later, but their generated result should be materialized as the same explicit `[system]` form when it is shared or reproduced. TOML files are data and must never execute Python code.
@@ -239,10 +309,95 @@ The safe default reduction strategy is ordinary Python integer remainder (`%`) w
 
 The safe default inverse strategy is the extended Euclidean algorithm, matching the flexible default in the later C++ code. It requires no precomputed table and works for any invertible operand/modulus pair. Failure of the coprimality precondition must raise a clear error rather than return a plausible residue.
 
+The initial Python helper for this primitive is
+`multiplicative_inverse(value, modulus)`. It returns the residue `inverse` such
+that `(value * inverse) % modulus == 1`, and raises an error when the inverse
+does not exist. This is the core per-channel operation used by mixed-radix
+conversion after one radix has been consumed.
+
+The higher-level helper
+`divide_residue_by_coprime_factor(residue, divisor, modulus)` applies that
+inverse multiplication and returns the residue-channel quotient. Its result
+`q` satisfies `(q * divisor) % modulus == residue % modulus`. For example,
+dividing residue `6` by divisor `5` in modulus `7` returns `4`, because
+`(4 * 5) % 7 == 6`.
+
+In mixed-radix conversion, after consuming a digit `d` at modulus `m`, a
+remaining channel with modulus `n` is updated as:
+
+```python
+new_residue = divide_residue_by_coprime_factor(
+    old_residue - d,
+    m,
+    n,
+)
+```
+
 `PPMDigit` division has two mathematically different cases that a strategy layer must not blur:
 
 - Dividing by a factor of the digit's own current modulus consumes one or more powers, reduces `PowerValid`, and may skip the digit. This changes the derived format.
 - Dividing by a value coprime to the digit modulus preserves the format and multiplies the residue by that value's modular inverse.
+
+The first Python implementation of this rule is `PPM.mod_div(divisor)`, backed
+by `PPMDigit.mod_div(divisor)`. It is intentionally a low-level RNS operation,
+not a Python-integer division shortcut. For a power-based digit, if `divisor`
+is an exact power of that digit's base modulus and divides the current effective
+modulus, the digit is divided directly and `PowerValid` is reduced. If
+`PowerValid` reaches zero, the digit is marked skipped. All other active
+channels divide by the same divisor through inverse modular multiplication.
+
+For example, in a system whose first digit is base `2` with normalized power
+`4`, the first effective modulus is `2 ** 4 == 16`. If an RNS value known to be
+even is divided by `2`, that digit's effective modulus becomes `2 ** 3 == 8`.
+The residue in that channel is directly halved; the other pairwise-coprime
+channels multiply by `2`'s modular inverse with respect to their own current
+moduli. The result is no longer in the normalized full system: it is a derived
+format and must only be combined with values in an identical effective format.
+
+The exact divide precondition is enforced on matching base-power channels. If
+the base-`2` channel currently holds an odd residue, `mod_div(2)` raises an
+error and leaves the value unchanged. This models the required a priori
+knowledge or test that the value is divisible by the consumed base factor.
+
+Base extension and normalization are the inverse side of mixed-radix
+decomposition. A derived value is first decomposed using its current effective
+radices, including partial-power and skipped positions. The resulting
+mixed-radix digits are then reconstructed by processing the retained digits from
+most-significant to least-significant:
+
+1. seed a normalized accumulator with the highest retained mixed-radix digit;
+2. multiply the accumulator by the next lower mixed radix; and
+3. add the next lower mixed-radix digit.
+
+This mirrors the C++ `MRN::Convert` method and is the opposite motion of
+mixed-radix conversion: decomposition subtracts and divides, while
+reconstruction multiplies and adds.
+
+The target format determines which operation is being performed:
+
+- `PPM.extend_to_current_power()` reconstructs the value to each digit's current
+  `Power`. This corresponds to the C++ `ExtendPart2Norm()` idea: skipped and
+  partial valid powers are recovered up to the value's current derived format,
+  but `Power` is not reset to `NormalPower`.
+- `PPM.normalize()` reconstructs the value all the way back to the original
+  `NormalPower` format. This corresponds to C++ `Normalize()`.
+- `PPM.derived_format_copy()` mirrors the C++ derived-value pattern in which
+  each active digit's `PowerValid` becomes its current `Power`, while
+  `NormalPower` is preserved so full normalization remains possible.
+- `PPM.normalized_copy()` and `PPM.extended_to_current_power_copy()` provide
+  non-mutating forms.
+
+`MRN.to_ppm()` performs reconstruction into a full normalized `PPM`. The `PPM`
+methods above choose the appropriate target format and then reconstruct through
+RNS multiply/add operations.
+
+Critical invariant failures should raise `RNSCriticalError`. The exception
+message begins with `CRITICAL ERROR`, includes the call location and function
+name, and appends relevant values such as digit index, residue, divisor,
+effective modulus, and raw PPM state. If unhandled, Python and Jupyter stop
+execution and display the normal traceback in addition to this context. Ordinary
+API validation errors, such as an unsupported print radix, may remain ordinary
+`ValueError`s.
 
 The C++ implementation offers both a compact inverse lookup table and a much larger brute-force division table. The compact table is indexed by digit position, valid power, and divisor; the brute-force table also accounts for every digit value and grows much faster. Neither table is required for the first Python port.
 
@@ -274,6 +429,110 @@ Fixed-radix arithmetic has legitimate, limited roles:
 Arbitrary-length binary and decimal helpers may therefore be added to the conversion layer when needed for flexible input and output. They must be visibly separated from the RNS arithmetic layer. Public documentation and tests should make it possible to tell whether a conversion selected a specialized RNS path, an RNS integer-division path, a mixed-radix path, or a fixed-radix fallback.
 
 Scalar helper operations do not violate this rule when the scalar is independently reduced into each residue channel and the requested arithmetic remains digit-wise. The forbidden pattern is reconstructing an existing RNS operand into a positional value in order to compute the result.
+
+### Overflow and range policy
+
+Unless a method explicitly states otherwise, RNS-PYPAL arithmetic follows the
+same broad range policy as C/C++ integer and fixed-point arithmetic: operations
+do not automatically check for overflow. The caller is responsible for selecting
+an RNS system with sufficient dynamic range and for performing any required
+range checks before or after an operation.
+
+This policy is especially natural for RNS because ordinary add, subtract, and
+multiply operations wrap in the declared residue range. Detecting overflow is
+possible, but it is not free. General overflow detection normally requires
+additional structure, such as redundant residue digits, comparison, conversion,
+or other range-analysis support. Those mechanisms are advanced features and
+should be added deliberately rather than imposed on every primitive operation.
+
+Consequently, passing tests for residue arithmetic means the digit-wise modular
+result is correct for the declared RNS format; it does not imply that the
+mathematical result fit in the intended application range. Future redundant-digit
+or range-checking features should be opt-in capability layers, not hidden
+default behavior.
+
+### Unsigned integer division
+
+The first Python unsigned integer division target is the stable C++ container
+path `PPM::DivStd`, which delegates to the `DivPM7` algorithm. The Python method
+is named `PPM.div_std(divisor)`. It follows the C++ mutation style: the dividend
+object is replaced by the quotient, and the returned `PPM` object is the
+remainder.
+
+This division method must remain RNS-native. It may use residue subtraction,
+residue addition, digit-level modular division, mixed-radix comparison,
+partial-power formats, divisor incrementing, and base extension/normalization
+steps. It must not convert the dividend and divisor to Python integers, perform
+integer division there, and convert the quotient and remainder back to RNS.
+
+The algorithm requires an RNS system containing a base modulus of `2`. In
+practice, systems with low prime base moduli such as `2`, `3`, and `5` are more
+useful because they give the divisor more available factors during the
+reduction process. When the working divisor has been reduced to a state where
+no current modulus factor is available for another division step, the algorithm
+increments the working divisor. This is the important `DivPM7` rule that can
+create a usable factor again, especially the base-2 factor.
+
+This method must be able to divide values at the high end of the represented
+unsigned range without relying on base extension outside the defined RNS number
+system. Like the rest of unsigned `PPM` arithmetic, division does not impose a
+general overflow policy beyond the declared residue system and the explicit
+algorithm preconditions.
+
+### PPM assignment and `AssignPM`
+
+Python `PPM` construction and assignment should support the important input
+forms needed by the original C++ class:
+
+- non-negative Python integers;
+- unsigned decimal strings;
+- unsigned hexadecimal strings using a `0x` prefix;
+- unsigned binary strings using a `0b` prefix when useful; and
+- compatible `PPM` values.
+
+String assignment is an input-conversion feature. It should encode the
+positional text into residues by repeated residue multiply/add steps so it can
+accept strings longer than ordinary machine integers and does not depend on
+Python's guarded decimal `int()` parser.
+
+`assign()` follows the C++ `Assign` convention for integer and string inputs:
+it resets the destination to the full normalized power-based system before
+encoding the new value. Assigning from another `PPM` copies the source's current
+valid-power state into the destination value without changing the destination's
+normal system definition.
+
+`assign_pm()` corresponds to the C++ `AssignPM` family. It is the partial-power
+assignment path: it can assign an integer or string into the current derived
+format, or copy/promote another `PPM` value's `PowerValid` structure into the
+destination's current working `Power` structure while retaining `NormalPower`
+as the route back to full normalization.
+
+Older C++ paths that assume simple modulus-only RNS behavior without
+partial-power derived formats should not be ported as first-class RNS-PYPAL
+behavior. The Python library assumes power-based `PPM` semantics as the
+foundation.
+
+For unsigned `PPM`, the initial general-purpose conversion fallback is:
+
+- `PPM.to_int()` -- converts through mixed-radix digits and returns a Python
+  arbitrary-precision integer for output/debugging;
+- `PPM.format_value(radix=10, prefix=False)` -- returns the represented unsigned
+  value in radix 2, 10, or 16; and
+- `PPM.print_value(...)` -- prints that converted value.
+
+`str(ppm)` uses the decimal `format_value()` path. Raw residue display remains
+available through `format_native()` / `print_native()`, and modulus-header
+display remains available through `format_whdr()` / `print_whdr()`.
+
+Python integers are arbitrary precision and can represent values far beyond the
+native CPU word size. Python versions such as 3.12 also protect direct
+integer-to-decimal conversion with a maximum digit guard. RNS-PYPAL's fallback
+decimal formatter therefore emits decimal strings in small chunks instead of
+depending on one direct `str(huge_int)` call. Hexadecimal and binary output are
+also supported for converted unsigned `PPM` values.
+
+This fallback is intentionally part of the conversion layer. Arithmetic methods
+must not call `to_int()` to compute RNS results.
 
 ### Python class mapping
 

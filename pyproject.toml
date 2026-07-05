@@ -13,6 +13,8 @@ dev = [
 ]
 explore = [
     "ipython",
+    "ipykernel",
+    "jupyterlab",
 ]
 
 [tool.pytest.ini_options]

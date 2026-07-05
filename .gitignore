@@ -308,6 +308,8 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 .hypothesis/
+.ipynb_checkpoints/
+Untitled*.ipynb
 .coverage
 htmlcov/
 dist/
