@@ -22,10 +22,10 @@ class MRN:
     system: RNSNumberSystem
 
     @classmethod
-    def from_ppm(cls, value: PPM) -> "MRN":
+    def from_ppm(cls, value: PPM, indices: tuple[int, ...] | None = None) -> "MRN":
         if not isinstance(value, PPM):
             raise TypeError("value must be a PPM")
-        return cls(tuple(iter_mixed_radix_digits(value)), value.system)
+        return cls(tuple(iter_mixed_radix_digits(value, indices=indices)), value.system)
 
     @property
     def num_digits(self) -> int:

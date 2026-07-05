@@ -2,6 +2,7 @@ import io
 import unittest
 
 from rns_pypal import (
+    DigitRole,
     PPM,
     PPMDigit,
     MRN,
@@ -84,6 +85,54 @@ class TestRNSNumberSystem(unittest.TestCase):
         right = RNSNumberSystem(moduli=[3, 5], powers=[1, 1], name="right")
 
         self.assertTrue(left.is_compatible(right))
+
+    def test_digit_roles_define_value_and_auxiliary_indices(self):
+        system = RNSNumberSystem(
+            moduli=[2, 3, 5],
+            powers=[2, 1, 1],
+            digit_roles=[
+                DigitRole.VALUE,
+                "value",
+                DigitRole.OVERFLOW_CHECK,
+            ],
+        )
+
+        self.assertEqual(system.full_moduli, (4, 3, 5))
+        self.assertEqual(system.value_full_moduli, (4, 3))
+        self.assertEqual(system.dynamic_range, 12)
+        self.assertEqual(system.value_indices, (0, 1))
+        self.assertEqual(system.auxiliary_indices, (2,))
+        self.assertEqual(system.overflow_check_indices, (2,))
+        self.assertEqual(system.redundant_indices, ())
+        self.assertEqual(system.arithmetic_indices, (0, 1, 2))
+        self.assertEqual(system.comparison_indices, (0, 1))
+        self.assertEqual(system.conversion_indices, (0, 1))
+
+    def test_rejects_auxiliary_only_system(self):
+        with self.assertRaisesRegex(ValueError, "at least one value digit"):
+            RNSNumberSystem(
+                moduli=[3, 5],
+                powers=[1, 1],
+                digit_roles=[DigitRole.REDUNDANT, DigitRole.OVERFLOW_CHECK],
+            )
+
+    def test_rejects_auxiliary_digits_before_value_digits(self):
+        with self.assertRaisesRegex(ValueError, "auxiliary digits must follow"):
+            RNSNumberSystem(
+                moduli=[3, 5, 7],
+                powers=[1, 1, 1],
+                digit_roles=[DigitRole.VALUE, DigitRole.REDUNDANT, DigitRole.VALUE],
+            )
+
+    def test_digit_roles_affect_compatibility(self):
+        left = RNSNumberSystem(moduli=[3, 5], powers=[1, 1])
+        right = RNSNumberSystem(
+            moduli=[3, 5],
+            powers=[1, 1],
+            digit_roles=[DigitRole.VALUE, DigitRole.REDUNDANT],
+        )
+
+        self.assertFalse(left.is_compatible(right))
 
 
 class TestPPMDigit(unittest.TestCase):
@@ -593,6 +642,75 @@ class TestPPM(unittest.TestCase):
         output = io.StringIO()
         value.print_whdr(file=output)
         self.assertEqual(output.getvalue(), "16 27\n-- --\n10 10\n")
+
+    def test_auxiliary_digits_do_not_extend_value_range(self):
+        system = RNSNumberSystem(
+            moduli=[2, 3, 5],
+            powers=[2, 1, 1],
+            digit_roles=[DigitRole.VALUE, DigitRole.VALUE, DigitRole.OVERFLOW_CHECK],
+        )
+
+        high_value = PPM(15, system=system)
+        wrapped_value = PPM(3, system=system)
+
+        self.assertEqual(high_value.format_value(), "3")
+        self.assertTrue(high_value.is_equal(wrapped_value))
+        self.assertNotEqual(high_value, wrapped_value)
+        self.assertEqual([digit.digit for digit in high_value], [3, 0, 0])
+        self.assertEqual([digit.digit for digit in wrapped_value], [3, 0, 3])
+
+    def test_auxiliary_digits_are_grouped_in_native_prints(self):
+        system = RNSNumberSystem(
+            moduli=[2, 3, 5, 7],
+            powers=[2, 1, 1, 1],
+            digit_roles=[
+                DigitRole.VALUE,
+                DigitRole.VALUE,
+                DigitRole.REDUNDANT,
+                DigitRole.OVERFLOW_CHECK,
+            ],
+        )
+        value = PPM(10, system=system)
+
+        self.assertEqual(value.format_native(), "2 1 (0, 3)")
+        self.assertEqual(value.format_whdr(), "4 3 (5 7)\n- - (- -)\n2 1 (0 3)")
+
+    def test_auxiliary_digits_participate_in_basic_arithmetic(self):
+        system = RNSNumberSystem(
+            moduli=[2, 3, 5],
+            powers=[2, 1, 1],
+            digit_roles=[DigitRole.VALUE, DigitRole.VALUE, DigitRole.REDUNDANT],
+        )
+        value = PPM(10, system=system)
+
+        value.add(5)
+
+        self.assertEqual(value.format_value(), "3")
+        self.assertEqual([digit.digit for digit in value], [3, 0, 0])
+
+    def test_mixed_radix_conversion_defaults_to_value_digits(self):
+        system = RNSNumberSystem(
+            moduli=[2, 3, 5],
+            powers=[2, 1, 1],
+            digit_roles=[DigitRole.VALUE, DigitRole.VALUE, DigitRole.REDUNDANT],
+        )
+        value = PPM(5, system=system)
+        mixed = MRN.from_ppm(value)
+
+        self.assertEqual([digit.index for digit in mixed.digits], [0, 1])
+        self.assertEqual(mixed.to_int(), 5)
+
+    def test_div_std_rejects_auxiliary_digit_systems_for_now(self):
+        system = RNSNumberSystem(
+            moduli=[2, 3, 5],
+            powers=[2, 1, 1],
+            digit_roles=[DigitRole.VALUE, DigitRole.VALUE, DigitRole.OVERFLOW_CHECK],
+        )
+        dividend = PPM(10, system=system)
+        divisor = PPM(2, system=system)
+
+        with self.assertRaisesRegex(RNSCriticalError, "auxiliary digits"):
+            dividend.div_std(divisor)
 
 
 if __name__ == "__main__":

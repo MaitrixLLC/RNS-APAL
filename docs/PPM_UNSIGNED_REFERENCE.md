@@ -14,11 +14,18 @@ partial-power formats. Converting to a Python integer is allowed for input,
 output, diagnostics, and test oracles, but not as the implementation of RNS
 arithmetic.
 
+This reference also assumes the auxiliary-digit policy now used by the
+architecture document: auxiliary digits are for redundancy and overflow
+checking, not for ordinary range or precision extension. To gain more range or
+precision, convert to a larger primary `RNSNumberSystem`; do not treat
+redundant digits as extra value digits.
+
 ## Public unsigned API currently exported
 
 The current `rns_pypal` package exports these unsigned-side objects and helpers:
 
 - `RNSNumberSystem`
+- `DigitRole`
 - `PPMDigit`
 - `PPM`
 - `MRDigit`
@@ -47,6 +54,7 @@ Constructor:
 RNSNumberSystem(
     moduli=[2, 3, 5],
     powers=[4, 2, 1],
+    digit_roles=["value", "value", "value"],
     fractional_digits=0,
     name=None,
 )
@@ -57,6 +65,11 @@ Important rules:
 - `moduli` are base moduli.
 - `powers` define each full normalized modulus as `base ** power`.
 - The full normalized moduli must be pairwise coprime.
+- `digit_roles` defaults to all `value` digits.
+- Auxiliary roles currently include `redundant` and `overflow_check`.
+- Auxiliary digits must be trailing digits.
+- Auxiliary digits participate in ordinary arithmetic when present, but they do
+  not define ordinary dynamic range, comparison, or output conversion.
 - The order of the digit list is stable and significant for mixed-radix
   conversion.
 - `fractional_digits` is retained for later `SPMF` work, but unsigned `PPM`
@@ -68,9 +81,17 @@ Useful properties and methods:
 | --- | --- |
 | `num_digits` | Number of residue digits. |
 | `full_moduli` | Tuple of `modulus ** power` values. |
+| `value_indices` | Digit indices that define the represented value. |
+| `auxiliary_indices` | Non-value digit indices. |
+| `redundant_indices` | Redundant/error-checking digit indices. |
+| `overflow_check_indices` | Overflow-checking digit indices. |
+| `arithmetic_indices` | Digits updated by ordinary low-level arithmetic. |
+| `comparison_indices` | Digits used for ordinary comparison. |
+| `conversion_indices` | Digits used for ordinary output conversion. |
+| `value_full_moduli` | Full moduli for value digits only. |
 | `full_modulus(index)` | Full normalized modulus for one digit. |
-| `dynamic_range` | Product of all full moduli. |
-| `unit_range` | Product of integer-side full moduli. |
+| `dynamic_range` | Product of value full moduli only. |
+| `unit_range` | Product of fractional value-digit full moduli. |
 | `power_based` | True when at least one digit has power greater than one. |
 | `is_compatible(other)` | Checks normalized geometry compatibility. |
 
@@ -243,6 +264,12 @@ These helpers support `div_std()` and are not intended as stable user API.
 - `-` for normalized or skipped columns;
 - `=` for reduced/partial-power columns; and
 - `*` for skipped residue digits.
+
+If a system contains auxiliary digits, `format_native()` and `format_whdr()`
+show them as a parenthesized suffix. For example, a two-value-digit system with
+two auxiliary digits may print as `2 1 (0, 3)` in native form. This makes the
+extra residues visible for debugging without implying that they extend the
+ordinary value range.
 
 Conversion methods are allowed to use mixed-radix reconstruction or Python
 integers because they are output/debug facilities. Arithmetic methods must not

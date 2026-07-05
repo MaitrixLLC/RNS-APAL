@@ -9,7 +9,7 @@ from .config import DEFAULT_SYSTEM, REZ9_INTEGER_SYSTEM
 from .digit import PPMDigit
 from .errors import RNSCriticalError, RNSPypalError
 from .mixed_radix import MRDigit, MixedRadixDecomposer, iter_mixed_radix_digits
-from .modtable import RNSNumberSystem
+from .modtable import DigitRole, RNSNumberSystem
 from .mrn import MRN
 from .ppm import PPM
 from .utils import (
@@ -23,6 +23,7 @@ __all__ = [
     "DEFAULT_SYSTEM",
     "REZ9_INTEGER_SYSTEM",
     "RNSNumberSystem",
+    "DigitRole",
     "PPMDigit",
     "PPM",
     "RNSPypalError",

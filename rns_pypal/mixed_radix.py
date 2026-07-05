@@ -32,13 +32,16 @@ class MixedRadixDecomposer:
     inverse modular multiplication.
     """
 
-    def __init__(self, value: PPM) -> None:
+    def __init__(self, value: PPM, indices: tuple[int, ...] | None = None) -> None:
         if not isinstance(value, PPM):
             raise TypeError("value must be a PPM")
         self.working = value.copy()
-        self._next_index = 0
+        self.indices = indices or value.system.conversion_indices
+        self.digits: list[MRDigit] = []
+        self._next_position = 0
         self._complete = False
         self._ensure_ordered_digits()
+        self._validate_indices()
 
     @property
     def is_complete(self) -> bool:
@@ -48,6 +51,14 @@ class MixedRadixDecomposer:
         for expected_index, digit in enumerate(self.working.rn):
             if digit.index != expected_index:
                 raise ValueError("RNS digits must remain ordered by index")
+
+    def _validate_indices(self) -> None:
+        if not self.indices:
+            raise ValueError("mixed-radix conversion requires at least one digit index")
+        if any(type(index) is not int or not 0 <= index < self.working.num_digits for index in self.indices):
+            raise ValueError("mixed-radix digit indices are out of range")
+        if len(set(self.indices)) != len(self.indices):
+            raise ValueError("mixed-radix digit indices must not contain duplicates")
 
     def __iter__(self) -> "MixedRadixDecomposer":
         return self
@@ -59,35 +70,45 @@ class MixedRadixDecomposer:
             raise
 
     def step(self) -> MRDigit:
-        if self._complete or self._next_index >= self.working.num_digits:
+        if self._complete or self._next_position >= len(self.indices):
             self._complete = True
             raise StopIteration
 
-        index = self._next_index
-        self._next_index += 1
+        index = self.indices[self._next_position]
+        self._next_position += 1
         digit = self.working.rn[index]
 
         radix = digit.full_modulus if digit.power_valid == 0 else digit.current_modulus
         if digit.skip:
             mixed_digit = MRDigit(index=index, digit=0, radix=radix, skip=True)
-            self._complete = self._next_index >= self.working.num_digits
+            self.digits.append(mixed_digit)
+            self._complete = self._next_position >= len(self.indices)
             return mixed_digit
 
         mixed_digit = MRDigit(index=index, digit=digit.digit, radix=radix)
+        self.digits.append(mixed_digit)
 
         if mixed_digit.digit:
-            self.working.sub(mixed_digit.digit)
+            self._subtract_from_conversion_channels(mixed_digit.digit)
 
         digit.skip_digit()
         self._divide_remaining_channels(radix)
 
-        if self.working.is_zero() or self._next_index >= self.working.num_digits:
+        if self._conversion_channels_are_zero() or self._next_position >= len(self.indices):
             self._complete = True
 
         return mixed_digit
 
+    def _remaining_indices(self) -> tuple[int, ...]:
+        return self.indices[self._next_position :]
+
+    def _subtract_from_conversion_channels(self, value: int) -> None:
+        for index in self.indices:
+            self.working.rn[index].sub(value)
+
     def _divide_remaining_channels(self, radix: int) -> None:
-        for digit in self.working.rn:
+        for index in self._remaining_indices():
+            digit = self.working.rn[index]
             if digit.skip:
                 continue
             digit.assign(
@@ -98,8 +119,14 @@ class MixedRadixDecomposer:
                 )
             )
 
+    def _conversion_channels_are_zero(self) -> bool:
+        return all(
+            self.working.rn[index].skip or self.working.rn[index].digit == 0
+            for index in self._remaining_indices()
+        )
 
-def iter_mixed_radix_digits(value: PPM) -> MixedRadixDecomposer:
+
+def iter_mixed_radix_digits(value: PPM, indices: tuple[int, ...] | None = None) -> MixedRadixDecomposer:
     """Return a stateful iterator over ``value``'s mixed-radix digits."""
 
-    return MixedRadixDecomposer(value)
+    return MixedRadixDecomposer(value, indices=indices)

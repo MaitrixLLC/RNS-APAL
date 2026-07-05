@@ -271,35 +271,35 @@ class PPM:
     def add(self, other: "PPM | int") -> None:
         if isinstance(other, PPM):
             self._ensure_format_compatible(other)
-            for left, right in zip(self.rn, other.rn):
-                left.add(right.digit)
+            for index in self.system.arithmetic_indices:
+                self.rn[index].add(other.rn[index].digit)
             return
         if type(other) is not int:
             raise TypeError("PPM operands must be PPM or int instances")
-        for digit in self.rn:
-            digit.add(other)
+        for index in self.system.arithmetic_indices:
+            self.rn[index].add(other)
 
     def sub(self, other: "PPM | int") -> None:
         if isinstance(other, PPM):
             self._ensure_format_compatible(other)
-            for left, right in zip(self.rn, other.rn):
-                left.sub(right.digit)
+            for index in self.system.arithmetic_indices:
+                self.rn[index].sub(other.rn[index].digit)
             return
         if type(other) is not int:
             raise TypeError("PPM operands must be PPM or int instances")
-        for digit in self.rn:
-            digit.sub(other)
+        for index in self.system.arithmetic_indices:
+            self.rn[index].sub(other)
 
     def mult(self, other: "PPM | int") -> None:
         if isinstance(other, PPM):
             self._ensure_format_compatible(other)
-            for left, right in zip(self.rn, other.rn):
-                left.mult(right.digit)
+            for index in self.system.arithmetic_indices:
+                self.rn[index].mult(other.rn[index].digit)
             return
         if type(other) is not int:
             raise TypeError("PPM operands must be PPM or int instances")
-        for digit in self.rn:
-            digit.mult(other)
+        for index in self.system.arithmetic_indices:
+            self.rn[index].mult(other)
 
     def increment(self) -> None:
         """Increment this value by one in its current effective format."""
@@ -382,16 +382,22 @@ class PPM:
         return result
 
     def is_zero(self) -> bool:
-        return all(digit.skip or digit.digit == 0 for digit in self.rn)
+        return all(
+            self.rn[index].skip or self.rn[index].digit == 0
+            for index in self.system.comparison_indices
+        )
 
     def is_one(self) -> bool:
-        return all(digit.skip or digit.digit == 1 for digit in self.rn)
+        return all(
+            self.rn[index].skip or self.rn[index].digit == 1
+            for index in self.system.comparison_indices
+        )
 
     def is_equal(self, other: "PPM") -> bool:
         self._ensure_format_compatible(other)
         return all(
-            left.skip or left.digit == right.digit
-            for left, right in zip(self.rn, other.rn)
+            self.rn[index].skip or self.rn[index].digit == other.rn[index].digit
+            for index in self.system.comparison_indices
         )
 
     def compare(self, other: "PPM") -> int:
@@ -493,6 +499,12 @@ class PPM:
         if not isinstance(divisor, PPM):
             raise TypeError("divisor must be a PPM")
         self._ensure_format_compatible(divisor)
+        if self.system.auxiliary_indices:
+            critical_error(
+                "PPM.div_std does not yet support auxiliary digits",
+                auxiliary_indices=self.system.auxiliary_indices,
+                digit_roles=tuple(str(role) for role in self.system.digit_roles),
+            )
 
         mod2_index = self._index_of_base_modulus(2)
         if mod2_index is None:
@@ -654,16 +666,21 @@ class PPM:
 
         if radix not in _SUPPORTED_RADICES:
             raise ValueError(f"unsupported radix {radix}; expected one of {_SUPPORTED_RADICES}")
-        fields: list[str] = []
-        for digit in self.rn:
+
+        def format_digit(index: int) -> str:
+            digit = self.rn[index]
             if digit.skip:
-                fields.append("*")
-            else:
-                value = _format_unsigned(digit.digit, radix)
-                if digit.power_valid != digit.power:
-                    value = f"X|{value}"
-                fields.append(value)
-        return " ".join(fields)
+                return "*"
+            value = _format_unsigned(digit.digit, radix)
+            if digit.power_valid != digit.power:
+                value = f"X|{value}"
+            return value
+
+        value_fields = [format_digit(index) for index in self.system.value_indices]
+        auxiliary_fields = [format_digit(index) for index in self.system.auxiliary_indices]
+        if auxiliary_fields:
+            return f"{' '.join(value_fields)} ({', '.join(auxiliary_fields)})"
+        return " ".join(value_fields)
 
     def print_native(self, radix: int = 10, *, file: TextIO | None = None) -> None:
         print(self.format_native(radix), file=file or sys.stdout)
@@ -676,8 +693,8 @@ class PPM:
         if console_width is not None and console_width < 1:
             raise ValueError("console_width must be positive")
 
-        columns: list[tuple[str, str, int, str]] = []
-        for digit in self.rn:
+        def column_for_index(index: int) -> tuple[str, str, int, str]:
+            digit = self.rn[index]
             modulus = digit.full_modulus if digit.power_valid == 0 else digit.current_modulus
             header = _format_unsigned(modulus, radix)
             value = "*" if digit.skip else _format_unsigned(digit.digit, radix)
@@ -685,7 +702,19 @@ class PPM:
             width = len(header)
             if len(value) > width:
                 value = "?" * width
-            columns.append((header, value, width, marker))
+            return header, value, width, marker
+
+        def grouped_auxiliary_column(columns: list[tuple[str, str, int, str]]) -> tuple[str, str, int, str]:
+            header = f"({' '.join(column[0].ljust(column[2]) for column in columns)})"
+            marker = f"({' '.join(column[3] * column[2] for column in columns)})"
+            value = f"({' '.join(column[1].ljust(column[2]) for column in columns)})"
+            width = len(header)
+            return header, value, width, marker
+
+        columns = [column_for_index(index) for index in self.system.value_indices]
+        auxiliary_columns = [column_for_index(index) for index in self.system.auxiliary_indices]
+        if auxiliary_columns:
+            columns.append(grouped_auxiliary_column(auxiliary_columns))
 
         groups: list[list[tuple[str, str, int, str]]] = []
         current: list[tuple[str, str, int, str]] = []
@@ -704,7 +733,12 @@ class PPM:
         lines: list[str] = []
         for group in groups:
             lines.append(" ".join(header.ljust(width) for header, _, width, _ in group))
-            lines.append(" ".join(marker * width for _, _, width, marker in group))
+            lines.append(
+                " ".join(
+                    marker.ljust(width) if len(marker) > 1 else marker * width
+                    for _, _, width, marker in group
+                )
+            )
             lines.append(" ".join(value.ljust(width) for _, value, width, _ in group))
         return "\n".join(lines)
 

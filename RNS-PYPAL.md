@@ -239,6 +239,67 @@ The system object describes the normalized target and must remain distinct from 
 
 The C++ `mode` field controls how a system is constructed, and `routine` selects an implementation strategy. Neither is part of the mathematical identity of an explicitly defined Python system. Two values with the same normalized system remain compatible even if their runtime arithmetic strategies differ.
 
+### Value digits and auxiliary digits
+
+`RNSNumberSystem` may describe both value digits and auxiliary digits. Value
+digits define the represented number, its public dynamic range, ordinary
+conversion, and comparison order. Auxiliary digits are additional residue
+channels carried with the RNS word for advanced checking features.
+
+The initial digit roles are:
+
+- `value` -- a normal digit that participates in the represented number;
+- `redundant` -- an auxiliary digit reserved for error detection and future
+  error correction; and
+- `overflow_check` -- an auxiliary digit reserved for overflow or range
+  violation detection.
+
+Auxiliary digits do not extend the represented value range and do not increase
+the value precision. If an algorithm needs more mathematical range or more
+precision, it should convert or cast the value into a larger primary
+`RNSNumberSystem`, perform the internal calculation there, and then
+round/truncate/normalize back into the intended result system. This applies to
+future high-precision algorithms such as Goldschmidt-style fixed-point
+division. Extra precision is a larger primary system concern, not a redundant
+digit concern.
+
+When auxiliary digits are active, ordinary low-level arithmetic such as add,
+subtract, and multiply should update them along with value digits. This keeps
+the auxiliary residues synchronized with the operation history. However,
+ordinary comparison, sign/range interpretation, and output conversion must use
+only value digits unless a method explicitly says it is performing an
+auxiliary consistency check.
+
+Auxiliary digits must occupy the last digit indexes of a system. This preserves
+the historical RNS digit order for value digits, keeps mixed-radix conversion
+stable, and makes the displayed RNS word unambiguous. Raw residue display
+should show auxiliary digits as a parenthesized suffix, for example
+`3 0 (1, 4)`, so they are visible but not mistaken for range-defining value
+digits. Header-style display should use the same parenthesized grouping.
+
+Several future operations can benefit from auxiliary digits as side-effect
+checks. Base extension and mixed-radix comparison already perform digit-by-digit
+reduction. When auxiliary checking is explicitly enabled, these operations may
+carry redundant or overflow-check digits through the same reduction and inspect
+their terminal state. In the expected simple overflow/error-detection model,
+the relevant auxiliary residues reduce to zero when the value is consistent;
+non-zero terminal residues indicate overflow, corruption, or invalid auxiliary
+state. These checks must be documented and opt-in until their exact algorithms
+are verified.
+
+Top-level operations should return fully normalized values in the intended
+public system. Internal operations may use derived partial powers, skipped
+digits, mixed-radix streams, or temporary larger systems, but the public result
+should not accidentally retain a larger internal range or precision. Auxiliary
+digits, when present, should either be rebuilt from the final value or checked
+by a documented consistency routine.
+
+For the first implementation slice, auxiliary digit plumbing is metadata and
+dispatch discipline: all existing systems default to `value` digits, dynamic
+range is computed from value digits only, and ordinary conversion/comparison
+ignore auxiliary digits. Error-correction, overflow-checking, and cross-system
+conversion algorithms will be added as explicit feature slices.
+
 ### TOML system definitions
 
 Normalized RNS systems shall be reproducible through human-readable TOML definition files. Loading a file is optional: the same `RNSNumberSystem` may also be constructed programmatically. Both paths must run the same validation and produce the same system identity.
