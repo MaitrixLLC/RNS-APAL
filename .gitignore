@@ -302,6 +302,21 @@ paket-files/
 __pycache__/
 *.pyc
 
+# Python / RNS-PYPAL local development
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Local editor state
+.vscode/
+
 # Cake - Uncomment if you are using it
 # tools/**
 # !tools/packages.config
