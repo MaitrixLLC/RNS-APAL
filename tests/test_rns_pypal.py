@@ -1,5 +1,6 @@
 import io
 import unittest
+import warnings
 
 from rns_pypal import (
     DigitRole,
@@ -13,6 +14,9 @@ from rns_pypal import (
     MRN,
     MixedRadixDecomposer,
     RNSCriticalError,
+    RNSDiagnosticLevel,
+    RNSDiagnosticWarning,
+    RNSRangeError,
     RNSNumberSystem,
     are_coprime,
     divide_residue_by_coprime_factor,
@@ -184,6 +188,27 @@ class TestPPMDigit(unittest.TestCase):
         self.assertEqual(digit.power_valid, 2)
         self.assertEqual(digit.current_modulus, 9)
 
+    def test_digit_exports_plain_record(self):
+        digit = PPMDigit(index=1, digit=17, modulus=3, power=2)
+
+        self.assertEqual(
+            digit.to_record(),
+            {
+                "index": 1,
+                "digit": 8,
+                "modulus": 3,
+                "power": 2,
+                "power_valid": 2,
+                "normal_power": 2,
+                "skip": False,
+                "full_modulus": 9,
+                "current_modulus": 9,
+            },
+        )
+
+        digit.skip_digit()
+        self.assertIsNone(digit.to_record()["current_modulus"])
+
 
 class TestMixedRadix(unittest.TestCase):
     def setUp(self):
@@ -284,6 +309,42 @@ class TestPPM(unittest.TestCase):
             expected.append(residue)
 
         self.assertEqual([digit.digit for digit in value], expected)
+
+    def test_ordinary_unsigned_assignment_wraps_without_range_check(self):
+        value = PPM(105, system=self.system)
+
+        self.assertEqual(value.format_value(), "0")
+
+    def test_checked_unsigned_assignment_accepts_in_range_external_value(self):
+        value = PPM(0, system=self.system)
+
+        value.assign_checked("0x68")
+
+        self.assertEqual(value.format_value(), "104")
+
+    def test_checked_unsigned_assignment_can_warn_and_continue(self):
+        value = PPM(0, system=self.system)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            value.assign_checked(105, on_error=RNSDiagnosticLevel.WARNING)
+
+        self.assertEqual(value.format_value(), "0")
+        self.assertEqual(len(caught), 1)
+        self.assertTrue(issubclass(caught[0].category, RNSDiagnosticWarning))
+        self.assertIn("outside unsigned range", str(caught[0].message))
+
+    def test_checked_unsigned_assignment_can_raise_recoverable_error(self):
+        value = PPM(0, system=self.system)
+
+        with self.assertRaisesRegex(RNSRangeError, "outside unsigned range"):
+            value.assign_checked(105, on_error=RNSDiagnosticLevel.ERROR)
+
+    def test_checked_unsigned_assignment_defaults_to_critical_error(self):
+        value = PPM(0, system=self.system)
+
+        with self.assertRaisesRegex(RNSCriticalError, "outside unsigned range"):
+            value.assign_checked("1234567890" * 450)
 
     def test_copy_assignment_is_independent(self):
         source = PPM(10, system=self.system)
@@ -757,6 +818,30 @@ class TestPPM(unittest.TestCase):
         with self.assertRaisesRegex(RNSCriticalError, "auxiliary digits"):
             dividend.div_std(divisor)
 
+    def test_ppm_exports_residue_arrays_and_records(self):
+        system = RNSNumberSystem(
+            moduli=[2, 3, 5],
+            powers=[2, 1, 1],
+            digit_roles=[DigitRole.VALUE, DigitRole.VALUE, DigitRole.OVERFLOW_CHECK],
+            name="export-demo",
+        )
+        value = PPM(10, system=system)
+
+        self.assertEqual(value.to_residues(), (2, 1, 0))
+        self.assertEqual(value.to_residues(include_auxiliary=False), (2, 1))
+
+        records = value.to_digit_records()
+        self.assertEqual(records[0]["index"], 0)
+        self.assertEqual(records[0]["digit"], 2)
+        self.assertEqual(records[0]["current_modulus"], 4)
+        self.assertEqual(records[2]["modulus"], 5)
+
+        exported = value.to_dict()
+        self.assertEqual(exported["class"], "PPM")
+        self.assertEqual(exported["residues"], (2, 1, 0))
+        self.assertEqual(exported["system"]["name"], "export-demo")
+        self.assertEqual(exported["system"]["digit_roles"], ("value", "value", "overflow_check"))
+
 
 class TestSPPM(unittest.TestCase):
     def setUp(self):
@@ -781,6 +866,64 @@ class TestSPPM(unittest.TestCase):
         self.assertEqual(decimal_value.format_value(), "-15")
         self.assertEqual(hex_value.format_value(), "-15")
         self.assertEqual(decimal_value.format_native(), hex_value.format_native())
+
+    def test_signed_range_helpers(self):
+        self.assertEqual(SPPM.signed_range(self.system), (-24, 23))
+        self.assertEqual(SPPM.format_signed_range(self.system), "-24..23")
+
+        output = io.StringIO()
+        SPPM.print_signed_range(self.system, file=output)
+        self.assertEqual(output.getvalue(), "-24..23\n")
+
+    def test_sppm_export_includes_sign_metadata(self):
+        value = SPPM(-7, system=self.system)
+
+        exported = value.to_dict()
+
+        self.assertEqual(exported["class"], "SPPM")
+        self.assertEqual(exported["residues"], (9, 2))
+        self.assertEqual(exported["sign_flag"], NEGATIVE)
+        self.assertEqual(exported["sign_valid"], SIGN_VALID)
+        self.assertEqual(exported["residue_sign"], NEGATIVE)
+        self.assertEqual(exported["value"], "-7")
+
+    def test_ordinary_assignment_wraps_without_range_check(self):
+        value = SPPM(25, system=self.system)
+
+        self.assertEqual(value.format_value(), "-23")
+
+    def test_checked_assignment_accepts_in_range_external_value(self):
+        value = SPPM(0, system=self.system)
+
+        value.assign_checked("-0xf")
+
+        self.assertEqual(value.format_value(), "-15")
+        self.assertEqual(value.sign_flag, NEGATIVE)
+        self.assertEqual(value.sign_valid, SIGN_VALID)
+
+    def test_checked_assignment_can_warn_and_continue(self):
+        value = SPPM(0, system=self.system)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            value.assign_checked(25, on_error=RNSDiagnosticLevel.WARNING)
+
+        self.assertEqual(value.format_value(), "-23")
+        self.assertEqual(len(caught), 1)
+        self.assertTrue(issubclass(caught[0].category, RNSDiagnosticWarning))
+        self.assertIn("outside signed range", str(caught[0].message))
+
+    def test_checked_assignment_can_raise_recoverable_error(self):
+        value = SPPM(0, system=self.system)
+
+        with self.assertRaisesRegex(RNSRangeError, "outside signed range"):
+            value.assign_checked(25, on_error=RNSDiagnosticLevel.ERROR)
+
+    def test_checked_assignment_defaults_to_critical_error(self):
+        value = SPPM(0, system=self.system)
+
+        with self.assertRaisesRegex(RNSCriticalError, "outside signed range"):
+            value.assign_checked(25)
 
     def test_calc_sign_uses_complement_range(self):
         positive = SPPM(23, system=self.system)

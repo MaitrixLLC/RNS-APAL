@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TextIO
 import sys
 
-from .errors import critical_error
+from .errors import RNSDiagnosticLevel, critical_error, report_diagnostic
 from .modtable import RNSNumberSystem
 from .ppm import _SUPPORTED_RADICES, PPM
 
@@ -71,6 +71,14 @@ class SPPM(PPM):
             raise ValueError("SPPM string assignment requires at least one digit")
         return sign, text
 
+    @staticmethod
+    def _external_signed_int(value: int | str) -> int:
+        if type(value) is int:
+            return value
+        if isinstance(value, str):
+            return int(value.strip(), 0)
+        raise TypeError("checked SPPM assignment requires an int or signed numeric string")
+
     def _assign_signed_integer(self, value: int) -> None:
         self._ensure_signed_supported()
         if type(value) is not int:
@@ -114,10 +122,70 @@ class SPPM(PPM):
             return
         self._assign_signed_integer(value)
 
+    @classmethod
+    def signed_range(cls, system: RNSNumberSystem) -> tuple[int, int]:
+        """Return the ordinary signed integer range for ``system``."""
+
+        return (-(system.dynamic_range // 2), (system.dynamic_range - 1) // 2)
+
+    @classmethod
+    def format_signed_range(cls, system: RNSNumberSystem) -> str:
+        """Return the ordinary signed integer range as text."""
+
+        minimum, maximum = cls.signed_range(system)
+        return f"{minimum}..{maximum}"
+
+    @classmethod
+    def print_signed_range(
+        cls,
+        system: RNSNumberSystem,
+        *,
+        file: TextIO | None = None,
+    ) -> None:
+        """Print the ordinary signed integer range."""
+
+        print(cls.format_signed_range(system), file=file or sys.stdout)
+
+    def assign_checked(
+        self,
+        value: int | str,
+        *,
+        on_error: str | RNSDiagnosticLevel = RNSDiagnosticLevel.CRITICAL,
+    ) -> None:
+        """Assign an external signed value after explicit range validation."""
+
+        external_value = self._external_signed_int(value)
+        minimum, maximum = self.signed_range(self.system)
+        if not minimum <= external_value <= maximum:
+            report_diagnostic(
+                on_error,
+                "SPPM checked assignment outside signed range",
+                value=external_value,
+                minimum=minimum,
+                maximum=maximum,
+                ppm_system=self.system.name,
+            )
+        self.assign(value)
+
     def copy(self) -> "SPPM":
         result = SPPM(0, system=self.system)
         result.assign(self)
         return result
+
+    def to_dict(self, *, include_auxiliary: bool = True) -> dict[str, object]:
+        """Return a plain-Python snapshot including signed metadata."""
+
+        record = super().to_dict(include_auxiliary=include_auxiliary)
+        record.update(
+            {
+                "class": type(self).__name__,
+                "sign_flag": self.sign_flag,
+                "sign_valid": self.sign_valid,
+                "residue_sign": self.calc_sign(),
+                "value": self.format_value(),
+            }
+        )
+        return record
 
     @classmethod
     def positive_range_max(cls, system: RNSNumberSystem) -> PPM:

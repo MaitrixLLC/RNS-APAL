@@ -2,7 +2,13 @@
 
 from .config import DEFAULT_SYSTEM, REZ9_INTEGER_SYSTEM
 from .digit import PPMDigit
-from .errors import RNSCriticalError, RNSPypalError
+from .errors import (
+    RNSCriticalError,
+    RNSDiagnosticLevel,
+    RNSDiagnosticWarning,
+    RNSPypalError,
+    RNSRangeError,
+)
 from .mixed_radix import MRDigit, MixedRadixDecomposer, iter_mixed_radix_digits
 from .modtable import DigitRole, RNSNumberSystem
 from .mrn import MRN
@@ -29,6 +35,9 @@ __all__ = [
     "SIGN_INVALID",
     "RNSPypalError",
     "RNSCriticalError",
+    "RNSRangeError",
+    "RNSDiagnosticWarning",
+    "RNSDiagnosticLevel",
     "MRDigit",
     "MixedRadixDecomposer",
     "MRN",

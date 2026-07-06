@@ -24,6 +24,80 @@ tests, documentation, notebooks, and project tooling.
 - Allow multiple RNS systems to coexist in one Python process.
 - Port and verify the library in small, independently tested slices.
 
+## RNS-primary viewpoint
+
+RNS-PYPAL treats the residue number system as the primary computational number
+system. It does not treat RNS as a foreign encoding of binary integers, decimal
+integers, or mixed-radix values.
+
+This viewpoint is a central design rule for the library. A `PPM` value is not
+"really" a Python integer stored in residues. It is an unsigned RNS value. An
+`SPPM` value is not "really" a signed binary integer stored in residues. It is
+a signed RNS value interpreted through method-of-complements rules. Later,
+`SPMF` values should likewise be fixed-point RNS values, not positional numbers
+temporarily hidden inside an RNS container.
+
+Mixed-radix conversion should therefore be described as decomposition, not as a
+return to the true representation. It is an RNS algorithmic tool used when an
+operation needs ordered digit significance: comparison, normalization,
+reconstruction, rounding, division support, fractional multiplication, or
+output conversion. A mixed-radix digit stream is a way for RNS computation to
+expose ordered information while still controlling the operation from the RNS
+side.
+
+Likewise, decimal, hexadecimal, binary text, and Python arbitrary-precision
+integers are boundary representations. They are useful for initialization,
+printing, debugging, tests, and human inspection. They are not the mathematical
+ground truth of an RNS-PYPAL value, and they must not become the hidden engine
+of arithmetic.
+
+RNS-PYPAL values should nevertheless be easy to export into ordinary Python
+data structures. Class-based value formats may expose residue arrays, digit
+records, dictionaries, and later structured serialization forms for notebooks,
+analysis tools, file formats, and interoperability. These exports are boundary
+views of the RNS state. They must preserve enough metadata to avoid ambiguity
+about system geometry, digit order, skipped digits, partial powers, auxiliary
+digits, and signed metadata, but they do not redefine the value as a positional
+number.
+
+This mirrors the historical maturation of binary computing. Early computers
+needed decimal/binary conversion at their boundaries, but binary eventually
+became understood as the machine's native arithmetic domain and decimal became
+primarily an input/output concern. RNS-PYPAL adopts the analogous stance for
+residue arithmetic: RNS is the native domain; conversion and decomposition are
+supporting methods.
+
+## Scientific and algebraic interoperability
+
+A key target of RNS-PYPAL is to let RNS values participate in high-level Python
+algebraic, scientific, and matrix-oriented workflows while preserving
+RNS-native arithmetic semantics.
+
+Ordinary Python containers such as `list[PPM]`, `list[list[PPM]]`, dictionaries,
+and later optional array-library adapters should be able to organize RNS
+values. External libraries may provide structure, storage, iteration,
+visualization, scheduling, and algorithm orchestration. They must not silently
+replace RNS arithmetic with positional integer or floating-point arithmetic.
+
+The scalar operation is the semantic boundary. If a high-level vector, matrix,
+or algebraic routine performs addition, subtraction, multiplication,
+comparison, division, scaling, rounding, or fixed-point work on RNS values, that
+operation must dispatch to the appropriate RNS-PYPAL scalar method or to an
+RNS-PYPAL-controlled vector/matrix helper built from those scalar methods.
+
+This makes three interoperability layers acceptable:
+
+1. plain Python containers that hold `PPM`, `SPPM`, and later `SPMF` values;
+2. RNS-PYPAL helper routines for vectors, matrices, dot products, transforms,
+   and other structured calculations; and
+3. optional adapters for external libraries, provided they preserve RNS-PYPAL
+   arithmetic dispatch and do not coerce values into Python `int`, `float`, or
+   another positional type except at explicit conversion boundaries.
+
+This rule keeps the library useful to Python researchers without surrendering
+the RNS-primary design. High-level libraries may organize RNS computation; they
+do not define the arithmetic ground truth.
+
 ## Python development environment
 
 The Python port is configured through `pyproject.toml`. This file is the
@@ -259,6 +333,7 @@ arithmetic. Under that policy:
 | Operation | Cached sign disposition |
 | --- | --- |
 | assignment from signed input | compute and mark valid |
+| checked assignment from signed input | explicitly validate external range, then assign |
 | copy | copy sign flag and validity |
 | explicit sign validation/recovery | compute from residues and mark valid |
 | positive + positive, both signs valid | preserve valid positive sign, assuming no overflow |
@@ -281,6 +356,13 @@ valuable because it can reveal arithmetic errors, invalid cached metadata, or
 overflow conditions. When the cached sign was marked valid, the disagreement
 must be treated as a critical error.
 
+Ordinary signed assignment from an outside positional value follows the same
+wraparound policy as C/C++ integer assignment into a fixed-width type.
+Conservative callers that need boundary enforcement should use an explicit
+checked assignment path. Checked assignment validates the external value against
+the signed complement range before encoding. The diagnostic severity should be
+selectable: warning and continue, recoverable error, or critical error.
+
 ### `SPMF`
 
 `SPMF` derives from `SPPM` and interprets part of the residue system as fixed-point fractional range. It tracks:
@@ -291,6 +373,40 @@ must be treated as a critical error.
 Fractional digits are the first digits in `Rn`. `SPMF` adds decimal and ratio assignment, fixed-point printing, fractional multiplication, scaling, division, inverse, normalization, and square-root routines. The C++ header contains multiple research versions of several algorithms; application-facing container methods such as `MultStd` should guide which implementation is treated as canonical.
 
 ## Python architecture
+
+### Numeric class hierarchy
+
+RNS-PYPAL should preserve the numeric hierarchy as real Python inheritance
+where the lower layer supplies valid behavior for the higher layer:
+
+```text
+PPM
+└── SPPM
+    └── SPMF
+```
+
+This is not merely a documentation convenience. It is a library design rule.
+`PPM` is the primitive unsigned partial-power residue engine. `SPPM` should
+derive from `PPM` and reuse its digit storage, system compatibility checks,
+partial-power handling, mixed-radix primitives, formatting helpers, and
+unsigned residue operations wherever those operations remain valid.
+
+`SPPM` should override only the behavior whose meaning changes under signed
+method-of-complements interpretation: signed assignment, sign recovery and
+validation, signed comparison, signed display, sign disposition, and signed
+arithmetic dispatch. When an intermediate operation is known to be an unsigned
+magnitude operation, `SPPM` may deliberately fall back to `PPM` behavior rather
+than reimplementing the same residue mechanics.
+
+`SPMF` should likewise derive from `SPPM` when fixed-point work begins. It will
+add fractional-digit interpretation, scaling, fractional multiplication,
+rounding, and fixed-point conversion rules while preserving the signed integer
+and unsigned residue machinery underneath.
+
+Composition or wrapper objects may still be useful for helper algorithms, such
+as mixed-radix streams or temporary working states. They should not replace the
+core numeric inheritance relationship unless a later design decision explicitly
+documents why inheritance would violate the arithmetic model.
 
 ### `RNSNumberSystem`
 
@@ -594,6 +710,16 @@ The result of a validation feature must not silently alter the mathematical
 result. If a check fails, it should return an explicit status or raise a clear
 exception according to the method's documented contract.
 
+RNS-PYPAL diagnostic handling should distinguish at least three severities:
+
+- warning -- report the condition and continue;
+- error -- raise a recoverable project exception; and
+- critical -- raise a hard-stop `RNSCriticalError`.
+
+The existing `critical_error(...)` helper remains a hard-stop convenience path.
+Feature-specific APIs may expose a severity parameter when it is useful to let
+applications choose between exploratory diagnostics and strict execution.
+
 ### Overflow and range policy
 
 Unless a method explicitly states otherwise, RNS-PYPAL arithmetic follows the
@@ -727,6 +853,7 @@ Python method names may follow Python conventions, but their arithmetic semantic
 12. Treat division-based reduction and extended-Euclidean inversion as the reference implementations against which optimized strategies are tested.
 13. Never implement an RNS arithmetic operation by converting operands to a positional representation, calculating there, and converting back.
 14. Confine arbitrary-precision binary and decimal arithmetic to explicit conversion, initialization, metadata, and test-oracle boundaries.
+15. Preserve the numeric inheritance hierarchy where appropriate: `SPPM` derives from `PPM`, and `SPMF` derives from `SPPM`, with higher-level classes overriding only the semantics that actually change.
 
 ## Evidence and verification policy
 
@@ -762,6 +889,14 @@ The repository currently contains:
   sign-cache disposition, signed comparison, negation/absolute value, and
   signed add/subtract/multiply; and
 - regression tests covering these implemented slices.
+
+Current class-level review documents are maintained separately:
+
+- `docs/PPM_UNSIGNED_REFERENCE.md` -- unsigned reference index
+- `docs/PPM_REFERENCE.md`
+- `docs/PPMDIGIT_REFERENCE.md`
+- `docs/MIXED_RADIX_REFERENCE.md`
+- `docs/SPPM_REFERENCE.md`
 
 This code is not yet a complete behavioral port of RNS-APAL. In particular,
 signed division, signed auxiliary digit handling, full fixed-point `SPMF`,

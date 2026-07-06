@@ -184,3 +184,18 @@ class PPMDigit:
             skip=self.skip,
             normal_power=self.normal_power,
         )
+
+    def to_record(self) -> dict[str, int | bool | None]:
+        """Return a plain-Python snapshot of this digit's current state."""
+
+        return {
+            "index": self.index,
+            "digit": self.digit,
+            "modulus": self.modulus,
+            "power": self.power,
+            "power_valid": self.power_valid,
+            "normal_power": self.normal_power,
+            "skip": self.skip,
+            "full_modulus": self.full_modulus,
+            "current_modulus": None if self.skip else self.current_modulus,
+        }

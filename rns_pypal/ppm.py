@@ -7,7 +7,7 @@ from typing import TextIO
 import sys
 
 from .digit import PPMDigit
-from .errors import critical_error
+from .errors import RNSDiagnosticLevel, critical_error, report_diagnostic
 from .modtable import RNSNumberSystem
 
 
@@ -87,6 +87,17 @@ def _format_unsigned(value: int, radix: int) -> str:
     raise ValueError(f"unsupported radix {radix}; expected one of {_SUPPORTED_RADICES}")
 
 
+def _digits_exceed_limit(radix: int, digits: list[int], limit: int) -> bool:
+    """Return whether ``digits`` in ``radix`` represent a value greater than limit."""
+
+    value = 0
+    for digit in digits:
+        if value > (limit - digit) // radix:
+            return True
+        value = value * radix + digit
+    return value > limit
+
+
 class PPM:
     """A mutable unsigned integer encoded as independent residue digits.
 
@@ -114,6 +125,54 @@ class PPM:
     def __iter__(self) -> Iterator[PPMDigit]:
         return iter(self.rn)
 
+    def _export_indices(self, include_auxiliary: bool) -> tuple[int, ...]:
+        if include_auxiliary:
+            return tuple(range(self.num_digits))
+        return self.system.value_indices
+
+    def to_residues(self, *, include_auxiliary: bool = True) -> tuple[int, ...]:
+        """Return the raw stored residues as a plain tuple.
+
+        Skipped digits are represented by their stored residue value, currently
+        zero. Use ``to_digit_records()`` when skip and power-valid state must be
+        preserved explicitly.
+        """
+
+        return tuple(self.rn[index].digit for index in self._export_indices(include_auxiliary))
+
+    def to_digit_records(
+        self,
+        *,
+        include_auxiliary: bool = True,
+    ) -> tuple[dict[str, int | bool | None], ...]:
+        """Return per-digit state as plain dictionaries."""
+
+        return tuple(self.rn[index].to_record() for index in self._export_indices(include_auxiliary))
+
+    def _system_record(self) -> dict[str, object]:
+        return {
+            "name": self.system.name,
+            "moduli": self.system.moduli,
+            "powers": self.system.powers,
+            "digit_roles": tuple(str(role.value) for role in self.system.digit_roles),
+            "fractional_digits": self.system.fractional_digits,
+        }
+
+    def to_dict(self, *, include_auxiliary: bool = True) -> dict[str, object]:
+        """Return a plain-Python snapshot suitable for notebooks and serialization.
+
+        The returned mapping is intentionally descriptive. It is not a promise
+        that every consumer should reconstruct arithmetic objects from it
+        blindly; compatibility and system identity must still be validated.
+        """
+
+        return {
+            "class": type(self).__name__,
+            "system": self._system_record(),
+            "residues": self.to_residues(include_auxiliary=include_auxiliary),
+            "digits": self.to_digit_records(include_auxiliary=include_auxiliary),
+        }
+
     def _assign_integer(self, value: int) -> None:
         if type(value) is not int:
             raise TypeError("PPM integer values must be int instances")
@@ -140,6 +199,34 @@ class PPM:
             self._assign_text(value)
             return
         self._assign_integer(value)
+
+    def _external_unsigned_out_of_range(self, value: int | str) -> bool:
+        maximum = self.system.dynamic_range - 1
+        if type(value) is int:
+            return not 0 <= value <= maximum
+        if isinstance(value, str):
+            radix, digits = _parse_unsigned_text(value)
+            return _digits_exceed_limit(radix, digits, maximum)
+        raise TypeError("checked PPM assignment requires an int or unsigned numeric string")
+
+    def assign_checked(
+        self,
+        value: int | str,
+        *,
+        on_error: str | RNSDiagnosticLevel = RNSDiagnosticLevel.CRITICAL,
+    ) -> None:
+        """Assign an external unsigned value after explicit range validation."""
+
+        if self._external_unsigned_out_of_range(value):
+            report_diagnostic(
+                on_error,
+                "PPM checked assignment outside unsigned range",
+                value=value,
+                minimum=0,
+                maximum=self.system.dynamic_range - 1,
+                ppm_system=self.system.name,
+            )
+        self.assign(value)
 
     def _promote_valid_powers_to_current_format(self) -> None:
         for digit in self.rn:
