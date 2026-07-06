@@ -192,6 +192,8 @@ avoids depending on Python's guarded direct decimal-to-int conversion.
 | `decrement()` | Yes | Subtracts one. |
 | `mod_div(divisor)` | Yes | Low-level RNS modular division by a scalar factor. May reduce `power_valid`. |
 | `div_std(divisor, *, max_iterations=1_000_000)` | Yes | Unsigned arbitrary integer division. Mutates dividend into quotient and returns remainder. |
+| `overflow_check_mismatches()` | Yes | Returns `(index, actual, expected)` entries for overflow-check digits that disagree with value digits. |
+| `has_overflow()` | Yes | True when overflow-check digits indicate wrapped unsigned overflow. |
 
 `add`, `sub`, and `mult` do not perform overflow checks. Like C/C++ unsigned
 integer arithmetic, the result wraps in the declared residue system.
@@ -203,6 +205,12 @@ division preconditions hold.
 `div_std()` ports the stable C++ `DivStd -> DivPM7` path. It requires a base
 modulus of `2`, works best with low prime base moduli such as `2`, `3`, and
 `5`, and uses the divisor-increment rule when no usable factor is available.
+
+`has_overflow()` is an explicit prototype check. It is useful only for systems
+with trailing `overflow_check` digits. Arithmetic maintains those digits, and
+the check compares them against the residues implied by the value digits alone.
+The check is not automatic and is not yet a general redundant-digit correction
+system.
 
 ### Derived-format and normalization methods
 
@@ -252,6 +260,9 @@ These helpers support `div_std()` and are not intended as stable user API.
 | `to_int()` | Yes | Converts through mixed-radix digits to a Python integer for output/debugging. |
 | `format_value(radix=10, prefix=False)` | Yes | Returns the represented unsigned value as radix 2, 10, or 16 text. |
 | `print_value(radix=10, prefix=False, file=None)` | Yes | Prints `format_value()`. |
+| `usable_range_max(system)` | Yes | Class method returning the largest ordinary unsigned value for a system, computed as zero minus one. |
+| `format_usable_range(system, radix=10, prefix=False)` | Yes | Class method returning the ordinary unsigned range as text. |
+| `print_usable_range(system, radix=10, prefix=False, file=None)` | Yes | Prints `format_usable_range()`. |
 | `format_native(radix=10)` | Yes | Returns raw residue digits. Skipped digits print as `*`; partial digits are marked `X|`. |
 | `print_native(radix=10, file=None)` | Yes | Prints `format_native()`. |
 | `format_whdr(radix=10, console_width=None)` | Yes | Prints modulus headers, separator markers, and residue digits. |

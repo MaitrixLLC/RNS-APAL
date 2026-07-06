@@ -218,6 +218,69 @@ The residue digits remain the authoritative complement-based representation. The
 
 Zero is canonicalized as positive with a valid sign.
 
+For RNS-PYPAL, the method-of-complements encoding is always the ground truth.
+The sign flag is cached metadata used for speed, consistency checks, and
+algorithm dispatch. It may be omitted, invalidated, recomputed, or validated,
+but it must never replace the encoded residue value as the actual signed
+representation.
+
+The coexistence of complement encoding and a sign-magnitude-style flag is
+intentional redundant notation. Positional number systems carry ordering and
+weight information directly in their digit positions, which makes comparison,
+sign interpretation, and range reasoning comparatively natural. RNS digits do
+not carry positional weights, so those operations require additional structure,
+typically mixed-radix conversion, comparison ranges, or explicit metadata.
+
+The cached sign flag provides some of that control without changing the
+underlying RNS arithmetic. When valid, it can speed signed dispatch and avoid
+unnecessary sign recovery. When checked against the complement-encoded value, it
+can detect invalid cached metadata, arithmetic errors, and in some cases
+overflow-like conditions. Thus the two sign notations are not competing
+representations; they are cooperating layers: complement residues define the
+number, while the redundant sign flag helps control and validate operations.
+
+Sign-producing and sign-validating operations:
+
+- Sign validation, sign extension, or sign recovery explicitly computes the
+  sign from the complement-encoded value and marks the cached sign valid.
+- Signed fractional multiplication generates the sign bit as part of the
+  operation. In that operation, the sign is not merely preserved; it is produced
+  by the algorithm.
+- Compare-style operations may later detect disagreement between a cached sign
+  flag and the complement-encoded value. If the cached sign is marked valid,
+  such disagreement is a critical error, not a reason to silently reinterpret or
+  correct the value. If the cached sign is invalid, the operation may explicitly
+  recover the sign from the complement encoding and mark it valid.
+
+Initial sign-flag disposition rules should follow the library's C/C++-style
+range policy: no automatic overflow checking is performed by ordinary
+arithmetic. Under that policy:
+
+| Operation | Cached sign disposition |
+| --- | --- |
+| assignment from signed input | compute and mark valid |
+| copy | copy sign flag and validity |
+| explicit sign validation/recovery | compute from residues and mark valid |
+| positive + positive, both signs valid | preserve valid positive sign, assuming no overflow |
+| negative + negative, both signs valid | preserve valid negative sign, assuming no overflow |
+| add with mixed signs | sign generally becomes invalid unless the operation explicitly computes it |
+| add when either input sign is invalid | result sign invalid unless explicitly computed |
+| subtraction | same policy as addition after applying the mathematical sign reversal of the subtrahend |
+| multiplication, both signs valid | compute result sign by ordinary sign multiplication |
+| multiplication when either input sign invalid | result sign invalid unless explicitly computed |
+| negation, sign valid | flip sign except canonical zero remains valid positive |
+| normalization/base extension | preserve sign only when the operation guarantees the encoded value is unchanged; otherwise invalidate or explicitly recompute |
+
+These rules deliberately separate sign propagation from overflow detection. For
+example, positive plus positive may preserve a valid positive sign under the
+same assumption made by C/C++ integer arithmetic: the caller is responsible for
+knowing whether the operation stayed in range. A later explicit sign validation,
+comparison consistency check, or redundant/overflow-check digit routine may
+detect that the cached sign and complement encoding disagree. That detection is
+valuable because it can reveal arithmetic errors, invalid cached metadata, or
+overflow conditions. When the cached sign was marked valid, the disagreement
+must be treated as a critical error.
+
 ### `SPMF`
 
 `SPMF` derives from `SPPM` and interprets part of the residue system as fixed-point fractional range. It tracks:
@@ -286,6 +349,15 @@ the relevant auxiliary residues reduce to zero when the value is consistent;
 non-zero terminal residues indicate overflow, corruption, or invalid auxiliary
 state. These checks must be documented and opt-in until their exact algorithms
 are verified.
+
+The first explicit prototype check is simple unsigned overflow detection using
+one or more trailing `overflow_check` digits. Ordinary add/subtract/multiply
+update the overflow-check digits along with value digits. A later call compares
+those check residues against the residues implied by the value digits alone. If
+they differ, the value digits have wrapped relative to the tracked auxiliary
+state. This does not force overflow checking on ordinary arithmetic; it is an
+explicit diagnostic method that benefits from residues already maintained by
+the arithmetic operation.
 
 Top-level operations should return fully normalized values in the intended
 public system. Internal operations may use derived partial powers, skipped
@@ -491,6 +563,37 @@ Arbitrary-length binary and decimal helpers may therefore be added to the conver
 
 Scalar helper operations do not violate this rule when the scalar is independently reduced into each residue channel and the requested arithmetic remains digit-wise. The forbidden pattern is reconstructing an existing RNS operand into a positional value in order to compute the result.
 
+### Explicit validation and side-effect checks
+
+Basic arithmetic is performance-first. Primitive operations such as add,
+subtract, multiply, and low-level modular scaling update the residue state
+required by the operation, but they must not automatically perform expensive
+validation features such as overflow detection, error detection, redundant-digit
+correction, sign recovery, or sign validation.
+
+Validation features are explicit unless the operation already computes the
+necessary information as an unavoidable byproduct. In those cases, the operation
+may update or validate cached metadata as a documented side effect. A side-effect
+check is acceptable only when it does not change the numerical semantics of the
+operation and does not impose a new hidden performance cost on ordinary
+arithmetic.
+
+Examples:
+
+- `PPM.add`, `PPM.sub`, and `PPM.mult` may maintain overflow-check or redundant
+  residues because those digits are part of the active arithmetic state, but
+  they do not automatically call overflow or error-checking routines.
+- `PPM.has_overflow()` is an explicit diagnostic check.
+- Future `SPPM` operations may maintain a sign cache, but basic arithmetic must
+  clearly document whether that cache is preserved, invalidated, or recomputed.
+- Future `SPMF` algorithms may validate sign or range state as a free side
+  effect when the required mixed-radix or comparison information is already
+  produced by the intended operation.
+
+The result of a validation feature must not silently alter the mathematical
+result. If a check fails, it should return an explicit status or raise a clear
+exception according to the method's documented contract.
+
 ### Overflow and range policy
 
 Unless a method explicitly states otherwise, RNS-PYPAL arithmetic follows the
@@ -648,16 +751,23 @@ Initialization and validation require particular care. The newer runtime `init_R
 
 The repository currently contains:
 
-- an `rns_pypal` package scaffold
-- initial `RNSNumberSystem` and `PPMDigit` implementations
-- initial `PPM`, `SPPM`, and `SPMF` implementations
-- a small smoke-test suite covering assignment, basic arithmetic, zero, comparison, and elementary sign behavior
+- an `rns_pypal` package with tested `RNSNumberSystem`, `PPMDigit`, `PPM`,
+  mixed-radix, and `MRN` foundations;
+- unsigned `PPM` assignment, conversion, add/subtract/multiply, comparison,
+  partial-power reduction, normalization/current-power extension, and the first
+  `DivStd`/`DivPM7` unsigned division port;
+- auxiliary digit role metadata for value, redundant, and overflow-check digits,
+  including explicit prototype overflow checking;
+- an initial complement-based `SPPM` slice for signed assignment, sign recovery,
+  sign-cache disposition, signed comparison, negation/absolute value, and
+  signed add/subtract/multiply; and
+- regression tests covering these implemented slices.
 
-This code has not yet been established as behaviorally equivalent to RNS-APAL. In particular, partial-power semantics, base extension, normalization, overflow/range behavior, conversion, signed-state transitions, and fixed-point arithmetic still require systematic comparison with C++.
-
-The current Python `PPM.compare()` lexicographically compares raw residue digits in reverse array order. That is not a valid general comparison for a non-positional RNS representation and must be replaced with the digit-by-digit mixed-radix process before Python comparison tests can be considered meaningful.
-
-The current Python `SPPM` skeleton treats its sign-magnitude flag as the operative representation rather than maintaining complement-based residue arithmetic. The current `SPMF` skeleton also contains positional integer-division shortcuts and incomplete expressions. These modules are unverified placeholders and must not guide the port of RNS arithmetic.
+This code is not yet a complete behavioral port of RNS-APAL. In particular,
+signed division, signed auxiliary digit handling, full fixed-point `SPMF`,
+advanced base extension behavior, Goldschmidt routines, square roots, and other
+research algorithms still require systematic comparison with C++ and additional
+design clarification.
 
 ## Recommended first conversion slice
 
@@ -678,9 +788,8 @@ Partial powers, signed values, and fractions should build on that verified base 
 
 ## Later work
 
-- Partial-power digits, skip state, derived formats, normalization, and base extension
-- Stable integer division through the `DivStd` behavior
-- `SPPM` sign validity, sign recovery, overflow rules, and signed arithmetic
+- Further partial-power/base-extension equivalence work
+- Signed division and SPPM auxiliary-digit policies
 - `SPMF` unit scaling, decimal/ratio assignment, normalization, and `MultStd`
 - Advanced division, Goldschmidt routines, square roots, and other research algorithms
 - Python conveniences such as operators and non-mutating APIs, added only after reference behavior is covered

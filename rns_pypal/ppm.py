@@ -488,6 +488,40 @@ class PPM:
         reconstructed.add(remainder)
         return dividend.is_equal(reconstructed)
 
+    def _value_implied_full_copy(self) -> "PPM":
+        """Return the full-system residues implied by the value digits only."""
+
+        from .mrn import MRN
+
+        return MRN.from_ppm(self, indices=self.system.value_indices).to_ppm(system=self.system)
+
+    def overflow_check_mismatches(self) -> tuple[tuple[int, int, int], ...]:
+        """Return overflow-check digit mismatches as ``(index, actual, expected)``.
+
+        This is an explicit prototype check. Overflow-check digits are compared
+        against the residues implied by the value digits alone. A mismatch means
+        the auxiliary overflow-check state no longer matches the represented
+        value, which is the simple wrapped-unsigned overflow signal.
+        """
+
+        if not self.system.overflow_check_indices:
+            return ()
+        expected = self._value_implied_full_copy()
+        mismatches: list[tuple[int, int, int]] = []
+        for index in self.system.overflow_check_indices:
+            actual_digit = self.rn[index]
+            expected_digit = expected.rn[index]
+            if actual_digit.skip or expected_digit.skip:
+                mismatches.append((index, actual_digit.digit, expected_digit.digit))
+            elif actual_digit.digit != expected_digit.digit:
+                mismatches.append((index, actual_digit.digit, expected_digit.digit))
+        return tuple(mismatches)
+
+    def has_overflow(self) -> bool:
+        """Return whether overflow-check digits disagree with value digits."""
+
+        return bool(self.overflow_check_mismatches())
+
     def div_std(self, divisor: "PPM", *, max_iterations: int = 1_000_000) -> "PPM":
         """Unsigned arbitrary integer division in RNS.
 
@@ -660,6 +694,44 @@ class PPM:
         file: TextIO | None = None,
     ) -> None:
         print(self.format_value(radix, prefix=prefix), file=file or sys.stdout)
+
+    @classmethod
+    def usable_range_max(cls, system: RNSNumberSystem) -> "PPM":
+        """Return the largest ordinary unsigned value for ``system``.
+
+        This intentionally computes the boundary in RNS style: assign zero and
+        subtract one. Auxiliary digits, if present, are carried in the returned
+        diagnostic value but do not extend the ordinary value range.
+        """
+
+        value = cls(0, system=system)
+        value.decrement()
+        return value
+
+    @classmethod
+    def format_usable_range(
+        cls,
+        system: RNSNumberSystem,
+        radix: int = 10,
+        *,
+        prefix: bool = False,
+    ) -> str:
+        """Return the ordinary unsigned usable range for ``system``."""
+
+        return f"0..{cls.usable_range_max(system).format_value(radix, prefix=prefix)}"
+
+    @classmethod
+    def print_usable_range(
+        cls,
+        system: RNSNumberSystem,
+        radix: int = 10,
+        *,
+        prefix: bool = False,
+        file: TextIO | None = None,
+    ) -> None:
+        """Print the ordinary unsigned usable range for ``system``."""
+
+        print(cls.format_usable_range(system, radix, prefix=prefix), file=file or sys.stdout)
 
     def format_native(self, radix: int = 10) -> str:
         """Return the raw RNS digit string corresponding to C++ ``Prints``."""

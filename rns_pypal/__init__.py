@@ -1,9 +1,4 @@
-"""RNS-PYPAL's currently verified public API.
-
-Only the normalized unsigned PPM foundation is public in this conversion
-slice. Signed and fractional classes will be exported after their RNS-native
-implementations have equivalence tests.
-"""
+"""RNS-PYPAL's currently verified public API."""
 
 from .config import DEFAULT_SYSTEM, REZ9_INTEGER_SYSTEM
 from .digit import PPMDigit
@@ -12,6 +7,7 @@ from .mixed_radix import MRDigit, MixedRadixDecomposer, iter_mixed_radix_digits
 from .modtable import DigitRole, RNSNumberSystem
 from .mrn import MRN
 from .ppm import PPM
+from .sppm import NEGATIVE, POSITIVE, SIGN_INVALID, SIGN_VALID, SPPM
 from .utils import (
     are_coprime,
     divide_residue_by_coprime_factor,
@@ -26,6 +22,11 @@ __all__ = [
     "DigitRole",
     "PPMDigit",
     "PPM",
+    "SPPM",
+    "POSITIVE",
+    "NEGATIVE",
+    "SIGN_VALID",
+    "SIGN_INVALID",
     "RNSPypalError",
     "RNSCriticalError",
     "MRDigit",

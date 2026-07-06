@@ -3,8 +3,13 @@ import unittest
 
 from rns_pypal import (
     DigitRole,
+    NEGATIVE,
     PPM,
     PPMDigit,
+    POSITIVE,
+    SIGN_INVALID,
+    SIGN_VALID,
+    SPPM,
     MRN,
     MixedRadixDecomposer,
     RNSCriticalError,
@@ -688,6 +693,46 @@ class TestPPM(unittest.TestCase):
         self.assertEqual(value.format_value(), "3")
         self.assertEqual([digit.digit for digit in value], [3, 0, 0])
 
+    def test_overflow_check_passes_for_in_range_addition(self):
+        system = RNSNumberSystem(
+            moduli=[2, 3, 5],
+            powers=[2, 1, 1],
+            digit_roles=[DigitRole.VALUE, DigitRole.VALUE, DigitRole.OVERFLOW_CHECK],
+        )
+        value = PPM(4, system=system)
+
+        value.add(5)
+
+        self.assertEqual(value.format_value(), "9")
+        self.assertFalse(value.has_overflow())
+        self.assertEqual(value.overflow_check_mismatches(), ())
+        self.assertEqual(value.format_native(), "1 0 (4)")
+
+    def test_overflow_check_detects_wrapped_addition(self):
+        system = RNSNumberSystem(
+            moduli=[2, 3, 5],
+            powers=[2, 1, 1],
+            digit_roles=[DigitRole.VALUE, DigitRole.VALUE, DigitRole.OVERFLOW_CHECK],
+        )
+        value = PPM(10, system=system)
+
+        value.add(5)
+
+        self.assertEqual(value.format_value(), "3")
+        self.assertTrue(value.has_overflow())
+        self.assertEqual(value.overflow_check_mismatches(), ((2, 0, 3),))
+        self.assertEqual(value.format_native(), "3 0 (0)")
+
+    def test_format_usable_range_uses_value_digits(self):
+        system = RNSNumberSystem(
+            moduli=[2, 3, 5],
+            powers=[2, 1, 1],
+            digit_roles=[DigitRole.VALUE, DigitRole.VALUE, DigitRole.OVERFLOW_CHECK],
+        )
+
+        self.assertEqual(PPM.format_usable_range(system), "0..11")
+        self.assertEqual(PPM.usable_range_max(system).format_native(), "3 2 (4)")
+
     def test_mixed_radix_conversion_defaults_to_value_digits(self):
         system = RNSNumberSystem(
             moduli=[2, 3, 5],
@@ -711,6 +756,154 @@ class TestPPM(unittest.TestCase):
 
         with self.assertRaisesRegex(RNSCriticalError, "auxiliary digits"):
             dividend.div_std(divisor)
+
+
+class TestSPPM(unittest.TestCase):
+    def setUp(self):
+        self.system = RNSNumberSystem(
+            moduli=[2, 3],
+            powers=[4, 1],
+            name="signed-48",
+        )
+
+    def test_signed_assignment_uses_complement_encoding(self):
+        value = SPPM(-1, system=self.system)
+
+        self.assertEqual(value.format_native(), "15 2")
+        self.assertEqual(value.format_value(), "-1")
+        self.assertEqual(value.sign_flag, NEGATIVE)
+        self.assertEqual(value.sign_valid, SIGN_VALID)
+
+    def test_signed_string_assignment_supports_decimal_and_hex(self):
+        decimal_value = SPPM("-15", system=self.system)
+        hex_value = SPPM("-0xf", system=self.system)
+
+        self.assertEqual(decimal_value.format_value(), "-15")
+        self.assertEqual(hex_value.format_value(), "-15")
+        self.assertEqual(decimal_value.format_native(), hex_value.format_native())
+
+    def test_calc_sign_uses_complement_range(self):
+        positive = SPPM(23, system=self.system)
+        negative = SPPM(-24, system=self.system)
+
+        positive.sign_valid = SIGN_INVALID
+        negative.sign_valid = SIGN_INVALID
+
+        self.assertEqual(positive.calc_set_sign(), POSITIVE)
+        self.assertEqual(negative.calc_set_sign(), NEGATIVE)
+        self.assertEqual(positive.format_value(), "23")
+        self.assertEqual(negative.format_value(), "-24")
+
+    def test_sign_mismatch_detects_bad_cached_sign(self):
+        value = SPPM(-3, system=self.system)
+
+        value.sign_flag = POSITIVE
+        value.sign_valid = SIGN_VALID
+
+        self.assertTrue(value.sign_mismatch())
+        self.assertEqual(value.format_value(), "-3")
+
+    def test_calc_set_sign_raises_on_valid_cached_sign_mismatch(self):
+        value = SPPM(-3, system=self.system)
+
+        value.sign_flag = POSITIVE
+        value.sign_valid = SIGN_VALID
+
+        with self.assertRaisesRegex(RNSCriticalError, "valid sign flag disagrees"):
+            value.calc_set_sign()
+
+    def test_signed_compare_uses_sign_then_complement_order(self):
+        self.assertEqual(SPPM(2, system=self.system).compare(SPPM(-1, system=self.system)), 1)
+        self.assertEqual(SPPM(-1, system=self.system).compare(SPPM(2, system=self.system)), 0)
+        self.assertEqual(SPPM(-1, system=self.system).compare(SPPM(-2, system=self.system)), 1)
+
+    def test_add_same_sign_preserves_valid_sign(self):
+        positive = SPPM(4, system=self.system)
+        positive.add(SPPM(5, system=self.system))
+
+        self.assertEqual(positive.format_value(), "9")
+        self.assertEqual(positive.sign_flag, POSITIVE)
+        self.assertEqual(positive.sign_valid, SIGN_VALID)
+
+        negative = SPPM(-4, system=self.system)
+        negative.add(SPPM(-5, system=self.system))
+
+        self.assertEqual(negative.format_value(), "-9")
+        self.assertEqual(negative.sign_flag, NEGATIVE)
+        self.assertEqual(negative.sign_valid, SIGN_VALID)
+
+    def test_add_mixed_sign_invalidates_sign_without_changing_value(self):
+        value = SPPM(5, system=self.system)
+
+        value.add(SPPM(-3, system=self.system))
+
+        self.assertEqual(value.format_value(), "2")
+        self.assertEqual(value.sign_valid, SIGN_INVALID)
+        self.assertEqual(value.calc_set_sign(), POSITIVE)
+
+    def test_subtraction_sign_disposition(self):
+        value = SPPM(5, system=self.system)
+        value.sub(SPPM(-3, system=self.system))
+
+        self.assertEqual(value.format_value(), "8")
+        self.assertEqual(value.sign_flag, POSITIVE)
+        self.assertEqual(value.sign_valid, SIGN_VALID)
+
+        value.sub(SPPM(10, system=self.system))
+
+        self.assertEqual(value.format_value(), "-2")
+        self.assertEqual(value.sign_valid, SIGN_INVALID)
+
+    def test_multiplication_computes_sign_when_inputs_valid(self):
+        value = SPPM(-4, system=self.system)
+
+        value.mult(SPPM(5, system=self.system))
+
+        self.assertEqual(value.format_value(), "-20")
+        self.assertEqual(value.sign_flag, NEGATIVE)
+        self.assertEqual(value.sign_valid, SIGN_VALID)
+
+    def test_multiplication_invalidates_sign_when_input_invalid(self):
+        value = SPPM(-4, system=self.system)
+        other = SPPM(5, system=self.system)
+        other.sign_valid = SIGN_INVALID
+
+        value.mult(other)
+
+        self.assertEqual(value.format_value(), "-20")
+        self.assertEqual(value.sign_valid, SIGN_INVALID)
+
+    def test_negate_and_abs_use_complement_encoding(self):
+        value = SPPM(7, system=self.system)
+        value.negate()
+
+        self.assertEqual(value.format_value(), "-7")
+        self.assertEqual(value.sign_flag, NEGATIVE)
+        self.assertEqual(value.sign_valid, SIGN_VALID)
+
+        value.abs()
+
+        self.assertEqual(value.format_value(), "7")
+        self.assertEqual(value.sign_flag, POSITIVE)
+        self.assertEqual(value.sign_valid, SIGN_VALID)
+
+    def test_zero_is_canonical_positive_valid(self):
+        value = SPPM(-1, system=self.system)
+        value.add(SPPM(1, system=self.system))
+
+        self.assertEqual(value.format_value(), "0")
+        self.assertEqual(value.sign_flag, POSITIVE)
+        self.assertEqual(value.sign_valid, SIGN_VALID)
+
+    def test_sppm_rejects_auxiliary_digit_systems_for_now(self):
+        system = RNSNumberSystem(
+            moduli=[2, 3, 5],
+            powers=[4, 1, 1],
+            digit_roles=[DigitRole.VALUE, DigitRole.VALUE, DigitRole.OVERFLOW_CHECK],
+        )
+
+        with self.assertRaisesRegex(RNSCriticalError, "auxiliary digit"):
+            SPPM(1, system=system)
 
 
 if __name__ == "__main__":
