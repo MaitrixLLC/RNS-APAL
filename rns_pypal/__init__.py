@@ -13,6 +13,7 @@ from .mixed_radix import MRDigit, MixedRadixDecomposer, iter_mixed_radix_digits
 from .modtable import DigitRole, RNSNumberSystem
 from .mrn import MRN
 from .ppm import PPM
+from .spmf import SPMF
 from .sppm import NEGATIVE, POSITIVE, SIGN_INVALID, SIGN_VALID, SPPM
 from .utils import (
     are_coprime,
@@ -29,6 +30,7 @@ __all__ = [
     "PPMDigit",
     "PPM",
     "SPPM",
+    "SPMF",
     "POSITIVE",
     "NEGATIVE",
     "SIGN_VALID",

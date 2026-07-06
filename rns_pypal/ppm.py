@@ -535,6 +535,74 @@ class PPM:
             return 0
         return compare_flag
 
+    def compare_part(self, other: "PPM", num_digits: int) -> int:
+        """Compare the first ``num_digits`` mixed-radix positions.
+
+        This mirrors C++ ``PPM::ComparePart`` and is primarily used for
+        rounding decisions. It streams only the low-order digit positions and
+        lets later unequal mixed-radix digits override earlier ones.
+        """
+
+        if type(num_digits) is not int or num_digits < 0:
+            raise ValueError("num_digits must be a non-negative integer")
+        if num_digits > len(self.system.value_indices):
+            raise ValueError("num_digits cannot exceed the number of value digits")
+        self._ensure_format_compatible(other)
+        if num_digits == 0:
+            return 0
+
+        from .mixed_radix import MixedRadixDecomposer
+
+        indices = self.system.value_indices[:num_digits]
+        left = MixedRadixDecomposer(self, indices=indices)
+        right = MixedRadixDecomposer(other, indices=indices)
+        compare_flag = 0
+
+        for _ in indices:
+            try:
+                left_digit = left.step()
+            except StopIteration:
+                left_digit_value = 0
+            else:
+                left_digit_value = left_digit.digit
+
+            try:
+                right_digit = right.step()
+            except StopIteration:
+                right_digit_value = 0
+            else:
+                right_digit_value = right_digit.digit
+
+            if left_digit_value > right_digit_value:
+                compare_flag = 1
+            elif left_digit_value != right_digit_value:
+                compare_flag = 0
+
+        return compare_flag
+
+    def is_equal_part(self, other: "PPM", num_digits: int) -> bool:
+        """Return whether the first ``num_digits`` value residues are equal."""
+
+        if type(num_digits) is not int or num_digits < 0:
+            raise ValueError("num_digits must be a non-negative integer")
+        if num_digits > len(self.system.value_indices):
+            raise ValueError("num_digits cannot exceed the number of value digits")
+        self._ensure_format_compatible(other)
+        return all(
+            self.rn[index].skip
+            or other.rn[index].skip
+            or self.rn[index].digit == other.rn[index].digit
+            for index in self.system.value_indices[:num_digits]
+        )
+
+    def complement(self) -> None:
+        """Replace this value by its complement in the current residue format."""
+
+        zero = PPM(0, system=self.system)
+        zero.assign_pm(0, format_source=self)
+        zero.sub(self)
+        self.assign(zero)
+
     def any_part_skips(self) -> bool:
         return any(digit.power_valid != digit.power for digit in self.rn)
 

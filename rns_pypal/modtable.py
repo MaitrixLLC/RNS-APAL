@@ -109,6 +109,18 @@ class RNSNumberSystem:
         )
 
     @property
+    def fractional_indices(self) -> tuple[int, ...]:
+        """Value digit indices that belong to the fixed-point fractional range."""
+
+        return self.value_indices[: self.fractional_digits]
+
+    @property
+    def whole_indices(self) -> tuple[int, ...]:
+        """Value digit indices that belong to the whole/integer range."""
+
+        return self.value_indices[self.fractional_digits :]
+
+    @property
     def auxiliary_indices(self) -> tuple[int, ...]:
         return tuple(
             index for index, role in enumerate(self.digit_roles)

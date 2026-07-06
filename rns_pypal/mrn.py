@@ -35,6 +35,32 @@ class MRN:
     def radices(self) -> tuple[int, ...]:
         return tuple(digit.radix for digit in self.digits)
 
+    def shifted_right(self, positions: int) -> "MRN":
+        """Return a mixed-radix value with low-order positions discarded.
+
+        The C++ ``MRN::ShiftRight`` operation marks the first ``positions``
+        mixed-radix digits as skipped. Reconstruction then ignores those
+        digits, effectively dividing by the product of the discarded radices
+        and truncating the remainder. This is used by fixed-point
+        multiplication to scale an integer product back to the fixed-point
+        unit range.
+        """
+
+        if type(positions) is not int or positions < 0:
+            raise ValueError("shift positions must be a non-negative integer")
+        if positions >= len(self.digits):
+            return MRN((), self.system)
+        shifted = tuple(
+            MRDigit(
+                index=digit.index,
+                digit=0 if offset < positions else digit.digit,
+                radix=digit.radix,
+                skip=True if offset < positions else digit.skip,
+            )
+            for offset, digit in enumerate(self.digits)
+        )
+        return MRN(shifted, self.system)
+
     def to_int(self) -> int:
         """Return the represented integer for conversion/debugging purposes."""
 

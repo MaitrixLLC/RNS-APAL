@@ -370,7 +370,147 @@ selectable: warning and continue, recoverable error, or critical error.
 - `NumFractDigits` -- current radix-point position
 - `NormalFractDigits` -- normalized radix-point position
 
-Fractional digits are the first digits in `Rn`. `SPMF` adds decimal and ratio assignment, fixed-point printing, fractional multiplication, scaling, division, inverse, normalization, and square-root routines. The C++ header contains multiple research versions of several algorithms; application-facing container methods such as `MultStd` should guide which implementation is treated as canonical.
+Fractional digits are the first digits in `Rn`. The fractional range is
+therefore the least-significant index range used by the default mixed-radix
+decomposition order. This is intentional: fixed-point algorithms must be able
+to consume fractional digits first before moving into whole/integer-range
+digits.
+
+`SPMF` also carries the concept of a sliding point. The normalized fraction
+position belongs to the declared `RNSNumberSystem`; the current fraction
+position belongs to the live `SPMF` value. Internal algorithms may temporarily
+move the current fraction point during scaling, fractional multiplication,
+division, rounding, or conversion between fixed-point formats. The conservative
+first policy is that public top-level operations should return results to the
+normal fraction position unless an API explicitly promises a sliding-point
+result.
+
+Arbitrary sliding-point arithmetic requires alignment rules similar in spirit
+to floating-point exponent alignment. Addition, subtraction, comparison, and
+other operations that depend on fixed-point scale must check that operands have
+compatible current fraction positions before the operation begins. If positions
+do not match, the operation must explicitly scale/align one or both operands
+through RNS operations or raise a clear error. It must not silently treat two
+different fixed-point positions as equivalent.
+
+`SPMF` adds decimal and ratio assignment, fixed-point printing, fractional
+multiplication, scaling, division, inverse, normalization, and square-root
+routines. The C++ header contains multiple research versions of several
+algorithms; application-facing container methods such as `MultStd` should guide
+which implementation is treated as canonical.
+
+Early `SPMF` input/output support may use a deliberately marked trap-door
+conversion path based on Python arbitrary-precision integers and strings. This
+is acceptable for fixed-point assignment, diagnostic printing, and research
+inspection because I/O is a boundary layer. For example, a decimal or rational
+input may be scaled into the fractional range as a positional integer and then
+encoded into RNS residues. Reverse conversion may interpret the scaled
+fixed-point residue value as an integer numerator over the fractional unit
+range and format that value for display.
+
+This trap-door I/O path does not weaken the RNS-native arithmetic rule. It must
+not be used to implement fixed-point addition, subtraction, comparison,
+multiplication, division, scaling, square root, or other mathematical
+operations. It exists so researchers can exercise many RNS geometries before
+specialized RNS-native conversion routines are available. As specialized
+conversion algorithms are ported from C++ or developed in Python, I/O dispatch
+should become capability-based: prefer a proven RNS-native conversion when the
+modulus set supports it, otherwise fall back to the documented trap-door
+conversion path.
+
+The basic fixed-point identity is:
+
+```text
+unit_range = product(current fractional digit moduli)
+scaled_integer = whole_part * unit_range + fractional_numerator
+represented_value = scaled_integer / unit_range
+```
+
+For signed values, sign handling is performed first through the `SPPM`
+method-of-complements interpretation; the separation formulas then apply to the
+positive magnitude.
+
+From the RNS-primary point of view, extracting the fixed-point pieces is an RNS
+decomposition problem. The fractional numerator is the integer represented by
+the fractional digit range. It can be obtained by retaining/reconstructing the
+mixed-radix contribution of the fractional digits while the whole-range digits
+are ignored or skipped for that extraction. The whole part is obtained by
+consuming the fractional digits through the same digit-by-digit mixed-radix
+reduction process. Those consumed fractional digits become skipped; the
+remaining whole-range state is then base-extended/reconstructed into an integer
+RNS value that is no longer scaled by `unit_range`.
+
+The C++ `SPMF::FracSep` routine is the reference evidence for this idea: it
+performs mixed-radix-style reduction, accumulates fractional digits into one
+result, accumulates whole digits into another result, and uses the current
+partial-power moduli for the digit weights. Python should preserve that
+interpretation even when an early diagnostic I/O fallback uses Python integers
+to format the final pieces.
+
+Fractional multiplication is one of the first major `SPMF` algorithms that must
+use this decomposition machinery carefully. Conceptually, the raw operation
+contains an integer multiplication followed by scaling out one extra copy of the
+fractional range. That scaling resembles fractional-to-whole separation, but it
+is not merely an I/O conversion: it is part of the arithmetic needed to return
+the product to the declared fixed-point scale.
+
+The standard same-format multiply has an important capacity rule. Because the
+fixed-point values are multiplied through an integer-style residue product
+before fractional normalization, the available raw RNS range must be large
+enough to hold that intermediate product. As a rule of thumb, preserving the
+same number of fractional digits and whole digits in the final result requires
+an RNS format whose raw range supports the square of the intended fixed-point
+value range. Equivalently, the system geometry defines the largest fixed-point
+fractional value that can be multiplied by itself and still fit before
+normalization scales the product back down. This mirrors binary fixed-point
+hardware/software practice: enough product bits must exist during the multiply
+before the result is shifted or rounded back into the destination format.
+
+Future advanced APIs may support a larger internal RNS work format for
+fractional multiplication, then normalize or cast the result back into the
+public `SPMF` format. That should be a separate, explicit operation. The
+baseline `SPMF` multiply should assume same-format raw capacity unless a method
+documents otherwise.
+
+Rounding is also driven by the mixed-radix digit stream. As fractional positions
+are reduced, the discarded fractional portion is compared against the half-range
+threshold of the fractional unit. If the discarded portion reaches the rounding
+threshold, the arithmetic result receives one unit of the retained fixed-point
+scale; otherwise it does not. The exact tie policy should be verified against
+the selected C++ routine before the Python method is finalized.
+
+Signed fractional multiplication has an additional complement-encoding issue.
+The current C++ `SPMF::MultStd` path delegates to `Mult4b`, which computes the
+raw residue product, derives the intermediate sign from the complement range,
+shifts the mixed-radix representation right by the fractional digit count, and
+applies a whole-range correction constant when the intermediate product is
+negative. Related C++ variants process the ordinary product and complemented
+product as tandem candidate magnitudes; those variants remain valuable
+reference material for the signed normalization problem, even though `Mult4b`
+is the first application path being ported. This is not assumed to be the final
+mathematics. RNS-PYPAL should leave room for a later single-value signed
+fractional multiplication method once that newer math is introduced and tested.
+
+The first Python `SPMF` implementation slice supports preliminary trap-door
+assignment/display helpers, unit-value helpers, same-format add, subtract,
+compare, and the first same-format `MultStd` / `Mult4b` fractional multiply
+port. Same-format arithmetic checks system/effective-format compatibility and
+fraction-position compatibility before operating. Addition, subtraction, and
+comparison delegate to inherited `SPPM` behavior and do not move the fraction
+point. Standard multiplication uses the raw residue product, mixed-radix
+fractional shift/truncation, rounding comparison, and signed correction
+constant path described above.
+
+The first mixed-type `SPMF` slice also supports whole-integer add/subtract and
+integer multiplication. Whole add/subtract corresponds to the C++ `Add1` and
+`Sub1` helpers: the integer operand is converted to an aligned fixed-point
+temporary by multiplying by the current unit range, then ordinary same-format
+fractional add/subtract is used. Integer multiplication corresponds to C++
+`Mult(__int64)` and `Mult(SPPM*)`: the scaled fixed-point integer is multiplied
+directly through inherited signed residue arithmetic, and the fraction point is
+unchanged. Accepted integer operands are explicit Python `int`, signed numeric
+strings, and `SPPM` values; an `SPMF` operand is always treated as fractional,
+not as an integer.
 
 ## Python architecture
 
@@ -672,6 +812,8 @@ Fixed-radix arithmetic has legitimate, limited roles:
 - accepting a Python integer or string and encoding it into residue digits;
 - returning an explicitly requested binary, decimal, hexadecimal, Python-integer, or textual representation;
 - implementing a documented conversion fallback when the modulus geometry lacks a specialized RNS conversion capability;
+- providing preliminary fixed-point `SPMF` I/O by scaling through Python
+  arbitrary-precision integers or strings at the boundary layer;
 - calculating system metadata and constants during initialization; and
 - serving as an independent test oracle, never as the implementation under test.
 
@@ -887,7 +1029,10 @@ The repository currently contains:
   including explicit prototype overflow checking;
 - an initial complement-based `SPPM` slice for signed assignment, sign recovery,
   sign-cache disposition, signed comparison, negation/absolute value, and
-  signed add/subtract/multiply; and
+  signed add/subtract/multiply;
+- an initial `SPMF` fixed-point slice for fraction-point metadata,
+  sliding-point checks, preliminary trap-door I/O, unit-value helpers, and
+  same-format add/subtract/compare/multiply; and
 - regression tests covering these implemented slices.
 
 Current class-level review documents are maintained separately:
@@ -897,12 +1042,14 @@ Current class-level review documents are maintained separately:
 - `docs/PPMDIGIT_REFERENCE.md`
 - `docs/MIXED_RADIX_REFERENCE.md`
 - `docs/SPPM_REFERENCE.md`
+- `docs/SPMF_REFERENCE.md`
 
 This code is not yet a complete behavioral port of RNS-APAL. In particular,
-signed division, signed auxiliary digit handling, full fixed-point `SPMF`,
-advanced base extension behavior, Goldschmidt routines, square roots, and other
-research algorithms still require systematic comparison with C++ and additional
-design clarification.
+signed division, signed auxiliary digit handling, mixed-type `SPMF`
+operations, `SPMF` division/scaling/normalization, advanced base extension
+behavior, Goldschmidt routines, square roots, and other research algorithms
+still require systematic comparison with C++ and additional design
+clarification.
 
 ## Recommended first conversion slice
 
@@ -925,7 +1072,7 @@ Partial powers, signed values, and fractions should build on that verified base 
 
 - Further partial-power/base-extension equivalence work
 - Signed division and SPPM auxiliary-digit policies
-- `SPMF` unit scaling, decimal/ratio assignment, normalization, and `MultStd`
+- `SPMF` normalization, scaling, division, and additional mixed-format casting
 - Advanced division, Goldschmidt routines, square roots, and other research algorithms
 - Python conveniences such as operators and non-mutating APIs, added only after reference behavior is covered
 
