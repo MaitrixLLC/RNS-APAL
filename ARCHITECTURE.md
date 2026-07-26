@@ -1,15 +1,50 @@
+# RNS-PyPAL Architecture
 
-# RNS-PYPAL
+RNS-PyPAL is a Python port of the original C++ RNS-APAL residue number system
+library. The initial goal is mathematical and behavioral fidelity for the
+stable core, followed by carefully tested Python-specific improvements.
 
-RNS-PYPAL is a Python port of the original C++ RNS-APAL residue number system library. The initial goal is mathematical and behavioral fidelity for the stable core, followed by carefully tested Python-specific improvements.
+This document is the canonical technical, mathematical, and architectural
+specification for RNS-PyPAL. It defines the project goals, RNS-native
+arithmetic rules, numeric hierarchy, compatibility requirements, porting
+policy, implementation status, and validation principles.
 
-This document describes the intended architecture. The C++ headers and implementations are essential reference evidence, but they are not assumed to be defect-free. Stable active behavior, mathematical invariants, and explicit equivalence tests determine what the Python library should preserve.
+## Agent reading contract
+
+The root [AGENTS.md](AGENTS.md) requires agents to read this document at the
+start of every session and to revisit the sections relevant to the current
+task before changing or reviewing behavior. This file is ordinary checked-in
+project documentation; `AGENTS.md` is the automatically discovered instruction
+file that makes this reading requirement persistent.
+
+When implementation behavior, C++ reference behavior, tests, comments, or
+other documentation disagree, follow the [evidence and verification
+policy](#evidence-and-verification-policy) and record the conflict rather than
+resolving it silently.
+
+## Document map
+
+- [Project goals](#project-goals) defines the intended outcome.
+- [RNS-primary viewpoint](#rns-primary-viewpoint) and [scientific and
+  algebraic interoperability](#scientific-and-algebraic-interoperability)
+  define the central computational boundary.
+- [Python development environment](#python-development-environment) records
+  supported verification and notebook workflows.
+- [Original C++ architecture](#original-c-architecture) records reference
+  evidence and historical behavior.
+- [Python architecture](#python-architecture) defines the port's class model,
+  system geometry, arithmetic policy, and invariants.
+- [Porting rules](#porting-rules) and [evidence and verification
+  policy](#evidence-and-verification-policy) govern implementation decisions.
+- [Current implementation status](#current-implementation-status) separates
+  implemented behavior from planned work.
 
 The original C++ RNS-APAL source and Visual Studio project files are kept under
-`cpp_ref/`. Future source analysis should look there first, for example
+`cpp_ref/`. Source analysis should look there first, including
 `cpp_ref/ppm.cpp`, `cpp_ref/ppm.h`, `cpp_ref/mrn.cpp`, `cpp_ref/sppm.cpp`, and
-`cpp_ref/spmf.cpp`. The root of the repository is reserved for the Python port,
-tests, documentation, notebooks, and project tooling.
+`cpp_ref/spmf.cpp`. The repository root is reserved for the Python port, tests,
+documentation, notebooks, and project tooling.
+
 
 ## Project goals
 
@@ -127,11 +162,15 @@ python -m pip install ipython ipykernel jupyterlab
 python -m jupyter lab
 ```
 
-The starter notebook is `notebooks/rns_pypal_scratch.ipynb`. It imports the
-local library, runs the current test suite, and shows basic `PPM` native/demo
-formatting. Notebook output should remain scratch state; committed notebooks
-should generally avoid saved execution noise unless the output is intentionally
-part of documentation.
+The exploratory notebook is `notebooks/rns_pypal_scratch.ipynb`. Focused
+verification notebooks are organized by the numeric hierarchy and documented
+in `notebooks/README.md`. They cover modular helpers, mixed-radix and `MRN`,
+unsigned `PPM`, signed `SPPM`, and fixed-point `SPMF`.
+
+Focused notebooks must execute from a clean kernel without depending on state
+from another notebook. Saved output is acceptable when it records an
+intentional verification run; incidental scratch output should not be treated
+as mathematical evidence.
 
 If a notebook cell is copied into another notebook, it should locate the
 repository root before importing local code:
@@ -139,7 +178,6 @@ repository root before importing local code:
 ```python
 from pathlib import Path
 import sys
-import pytest
 
 def find_repo_root(start=None):
     path = Path.cwd() if start is None else Path(start).resolve()
@@ -151,10 +189,12 @@ def find_repo_root(start=None):
 repo_root = find_repo_root()
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
-
-result = pytest.main([str(repo_root / "tests")])
-assert result == 0
 ```
+
+Run pytest separately from the repository root so notebook execution and
+automated regression testing remain independent verification layers. The
+numbered files in `tests/` document the dependency hierarchy from modular
+helpers through `SPMF`; each file remains independently collectable.
 
 The current `pytest` configuration runs the `tests` directory quietly and
 disables pytest's cache provider because this workspace may reject writes to
@@ -1033,7 +1073,8 @@ The repository currently contains:
 - an initial `SPMF` fixed-point slice for fraction-point metadata,
   sliding-point checks, preliminary trap-door I/O, unit-value helpers, and
   same-format add/subtract/compare/multiply; and
-- regression tests covering these implemented slices.
+- hierarchy-ordered pytest files and focused clean-kernel notebooks covering
+  these implemented slices.
 
 Current class-level review documents are maintained separately:
 
