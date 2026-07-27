@@ -241,51 +241,10 @@ Before modifying or renaming it, determine:
 
 ---
 
-## Current Immediate Objective
-
-Create a conservative agent-assisted development structure.
-
-Initial tasks:
-
-1. Inventory the repository.
-2. Inventory all notebooks.
-3. Identify current and obsolete names.
-4. Determine which notebooks run from a clean kernel.
-5. Determine what tests already exist.
-6. Create `PROJECT_STATUS.md`.
-7. Create `AGENTS.md`.
-8. Create `notebooks/README.md`.
-
-No files should be deleted, moved, renamed, or substantially refactored during the initial inventory.
-
----
-
 ## Current Next Task
 
-Ask the VS Code agent to inspect the repository and notebooks without editing anything.
-
-Suggested prompt:
-
-> Inspect the complete RNS-PyPAL repository, including Python source files, tests, notebooks, examples, documentation, configuration files, and available Git history.
->
-> Produce a factual current-state assessment containing:
->
-> * implemented capabilities;
-> * partially implemented capabilities;
-> * existing tests;
-> * notebook inventory;
-> * notebooks that appear outdated;
-> * obsolete class, function, or demonstration names;
-> * notebooks that should be run from a clean kernel;
-> * environment and dependency requirements;
-> * undocumented mathematical assumptions;
-> * the three most logical next tasks.
->
-> Do not edit, rename, move, or delete any files.
->
-> Do not infer mathematical correctness merely because code runs.
->
-> Clearly distinguish observed facts from inferences.
+Read `PROJECT_STATUS.md`, check Git status, and select one bounded task whose
+mathematical contract can be verified with focused tests.
 
 ---
 
@@ -300,6 +259,8 @@ What I did:
 * Confirmed the interpreter location.
 * Connected VS Code Jupyter to the `.venv` kernel.
 * Identified an older notebook using the name `print_demo`.
+* Created `PROJECT_STATUS.md` and recorded the unported `PPM` future-work
+  tasks identified by C++/Python comparison.
 
 What worked:
 
@@ -312,8 +273,8 @@ What remains uncertain:
 * Whether `print_demo` was renamed or replaced.
 * Which notebooks are current.
 * Which notebook results have automated tests.
-* The exact overall implementation status.
+* The intended source/destination contract for C++ `PPM::TruncateFirst`.
 
 Exact next step:
 
-Perform a read-only repository and notebook inventory using the VS Code agent.
+Read `PROJECT_STATUS.md` and choose a bounded, testable task from its queue.

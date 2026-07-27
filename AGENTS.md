@@ -10,8 +10,10 @@ repository:
 2. Read [ARCHITECTURE.md](ARCHITECTURE.md) completely. It is the canonical
    technical and mathematical specification, but it is a referenced project
    document rather than an automatically discovered instruction file.
-3. Inspect the current Git status and preserve unrelated user changes.
-4. For the requested task, revisit the architecture sections governing the
+3. Read [PROJECT_STATUS.md](PROJECT_STATUS.md) completely. It records the
+  current bounded task queue and unresolved implementation work.
+4. Inspect the current Git status and preserve unrelated user changes.
+5. For the requested task, revisit the architecture sections governing the
    affected classes, algorithms, representations, and invariants.
 
 Do not skip the architecture review because a change appears small. Small
@@ -22,6 +24,8 @@ assumptions.
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — canonical architecture, mathematical
   rules, implementation status, and validation policy.
+- [PROJECT_STATUS.md](PROJECT_STATUS.md) — current task queue and deferred
+  implementation work; verify every item against the architecture and source.
 - [HUMAN_CONTEXT.md](HUMAN_CONTEXT.md) — personal project re-entry notes and
   historical context; verify potentially stale claims against the repository.
 - [notebooks/README.md](notebooks/README.md) — focused notebook hierarchy and
