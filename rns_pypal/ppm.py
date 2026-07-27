@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from random import Random
 from collections.abc import Iterator
 from typing import TextIO
 import sys
@@ -199,6 +200,26 @@ class PPM:
             self._assign_text(value)
             return
         self._assign_integer(value)
+
+    def assign_rnd(self, num_digits: int, *, seed: int | None = None) -> None:
+        """Assign a pseudorandom unsigned value from ``num_digits`` decimal digits.
+
+        This is the Python counterpart of C++ ``PPM::AssignRnd``. The generated
+        decimal text may begin with zero and is assigned through ``assign()``,
+        so the destination returns to its normalized system and follows ordinary
+        unsigned wraparound semantics. Pass ``seed`` for a reproducible sequence.
+        """
+
+        if type(num_digits) is not int:
+            raise TypeError("num_digits must be an int")
+        if num_digits <= 0:
+            raise ValueError("num_digits must be greater than zero")
+        if seed is not None and type(seed) is not int:
+            raise TypeError("seed must be an int or None")
+
+        generator = Random(seed)
+        decimal_text = "".join(str(generator.randrange(10)) for _ in range(num_digits))
+        self.assign(decimal_text)
 
     def _external_unsigned_out_of_range(self, value: int | str) -> bool:
         maximum = self.system.dynamic_range - 1

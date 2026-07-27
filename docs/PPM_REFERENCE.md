@@ -63,6 +63,7 @@ copy_value = PPM(value)
 | --- | --- | --- |
 | `__init__(value=0, *, system=None)` | Yes | Creates a `PPM` from an integer, string, or compatible `PPM`. Copy construction can infer the system from the source. |
 | `assign(value)` | Yes | Assigns an integer, unsigned string, or compatible `PPM`. Integer/string assignment resets to the normalized system. |
+| `assign_rnd(num_digits, *, seed=None)` | Yes | Assigns a pseudorandom decimal value with the requested generated digit count. An explicit seed makes the result reproducible. |
 | `assign_checked(value, *, on_error="critical")` | Yes | Explicitly range-checks an external unsigned integer/string before assignment. Ordinary `assign()` still wraps. |
 | `assign_pm(value, *, format_source=None)` | Yes | AssignPM-style partial-power assignment. Assigns into the current derived format, or adopts a source derived format before assigning. |
 | `copy()` | Yes | Returns an independent value copy. |
@@ -77,6 +78,12 @@ integer or unsigned string is in `0..dynamic_range-1` before assigning. Its
 diagnostic severity can be selected as warning, recoverable error, or critical
 error. The default is critical. Ordinary `assign()` follows the RNS-PYPAL
 wraparound policy.
+
+`assign_rnd()` is the Python counterpart of C++ `PPM::AssignRnd`. It generates
+decimal characters and delegates to ordinary `assign()`, so it accepts possible
+leading zeroes, resets derived values to the normalized system, and follows the
+same unsigned wraparound policy. The optional seed exists for reproducible
+research examples and tests. The generator is not cryptographic.
 
 ## Basic properties and iteration
 
@@ -244,6 +251,8 @@ The unsigned tests currently cover:
 - normalization and current-power extension;
 - derived-format compatibility checks;
 - `assign()` for integers and strings;
+- `assign_rnd()` for deterministic seeded generation, leading zeroes, normalized
+  format restoration, and argument validation;
 - `assign_checked()` warning/error/critical behavior;
 - `assign_pm()` partial-power assignment behavior;
 - explicit overflow-check digit prototypes; and

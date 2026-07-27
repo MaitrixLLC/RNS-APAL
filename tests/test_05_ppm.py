@@ -56,6 +56,62 @@ class TestPPM(unittest.TestCase):
 
         self.assertEqual([digit.digit for digit in value], expected)
 
+    def test_assign_rnd_reproduces_seeded_decimal_assignment_in_large_system(self):
+        system = RNSNumberSystem(
+            moduli=[2, 3, 5, 7, 11, 13],
+            powers=[32, 20, 14, 12, 10, 9],
+            name="power-based-through-13",
+        )
+        expected_text = "16532417518269081220223169124236009847500445006010"
+        value = PPM(0, system=system)
+
+        value.assign_rnd(50, seed=20_260_726)
+
+        expected_residues = []
+        for modulus in system.full_moduli:
+            residue = 0
+            for character in expected_text:
+                residue = (residue * 10 + int(character)) % modulus
+            expected_residues.append(residue)
+
+        self.assertEqual(value.format_value(), expected_text)
+        self.assertEqual(value.to_residues(), tuple(expected_residues))
+        self.assertFalse(value.any_part_skips())
+
+    def test_assign_rnd_accepts_a_generated_leading_zero(self):
+        value = PPM(0, system=self.system)
+
+        value.assign_rnd(8, seed=2)
+
+        self.assertEqual(value.format_value(), str(1_152_449 % self.system.dynamic_range))
+
+    def test_assign_rnd_resets_a_derived_value_to_its_normalized_system(self):
+        system = RNSNumberSystem(moduli=[2, 3, 5], powers=[4, 2, 2])
+        value = PPM(42, system=system)
+        value.mod_div(2)
+
+        value.assign_rnd(8, seed=2)
+
+        self.assertEqual([digit.power for digit in value], list(system.powers))
+        self.assertEqual([digit.power_valid for digit in value], list(system.powers))
+        self.assertFalse(any(digit.skip for digit in value))
+
+    def test_assign_rnd_rejects_invalid_digit_counts_and_seed_types(self):
+        value = PPM(0, system=self.system)
+
+        for num_digits in (0, -1):
+            with self.subTest(num_digits=num_digits):
+                with self.assertRaisesRegex(ValueError, "greater than zero"):
+                    value.assign_rnd(num_digits)
+
+        for num_digits in (True, 1.5, "8"):
+            with self.subTest(num_digits=num_digits):
+                with self.assertRaisesRegex(TypeError, "num_digits must be an int"):
+                    value.assign_rnd(num_digits)
+
+        with self.assertRaisesRegex(TypeError, "seed must be an int or None"):
+            value.assign_rnd(8, seed=True)
+
     def test_ordinary_unsigned_assignment_wraps_without_range_check(self):
         value = PPM(105, system=self.system)
 

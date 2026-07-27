@@ -967,6 +967,14 @@ positional text into residues by repeated residue multiply/add steps so it can
 accept strings longer than ordinary machine integers and does not depend on
 Python's guarded decimal `int()` parser.
 
+`PPM.assign_rnd(num_digits, seed=None)` corresponds to C++
+`PPM::AssignRnd(int num_digs)`. It generates the requested number of
+pseudorandom decimal characters, including possible leading zeroes, and
+delegates to ordinary normalized string assignment. An explicit seed provides
+repeatable examples and tests; omitting it produces a newly seeded sequence.
+This is an initialization helper, not an RNS arithmetic operation or a
+cryptographic random-number generator.
+
 `assign()` follows the C++ `Assign` convention for integer and string inputs:
 it resets the destination to the full normalized power-based system before
 encoding the new value. Assigning from another `PPM` copies the source's current

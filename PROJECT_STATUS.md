@@ -33,13 +33,7 @@ paths.
      zero predicate beginning at a specified index.
    - Reference: `cpp_ref/ppm.cpp`, `PPM::Zero(int)`.
 
-4. `PPM::AssignRnd(int num_digs)`
-   - Add an optional, explicitly seeded random-value helper that assigns an
-     RNS value from a generated decimal string of the requested length.
-   - Keep random generation outside deterministic arithmetic tests.
-   - Reference: `cpp_ref/ppm.cpp`, `PPM::AssignRnd`.
-
-5. `PPM::TruncateFirst(PPM *ppm, int numdigs)`
+4. `PPM::TruncateFirst(PPM *ppm, int numdigs)`
    - Clarify the C++ contract before porting. The implementation retains the
      first low-order RNS positions and base-extends, but it does not use its
      `ppm` parameter and has no repository call sites.
