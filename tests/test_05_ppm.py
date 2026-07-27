@@ -8,11 +8,15 @@ from rns_pypal import (
     DigitRole,
     MRN,
     PPM,
+    RNSCompatibilityError,
     RNSCriticalError,
     RNSDiagnosticLevel,
     RNSDiagnosticWarning,
+    RNSEffectiveFormatError,
+    RNSPypalError,
     RNSRangeError,
     RNSNumberSystem,
+    RNSSystemCompatibilityError,
 )
 
 
@@ -235,9 +239,18 @@ class TestPPM(unittest.TestCase):
     def test_rejects_incompatible_systems(self):
         other_system = RNSNumberSystem(moduli=[3, 5, 11], powers=[1, 1, 1])
         value = PPM(1, system=self.system)
+        before = value.to_dict()
 
-        with self.assertRaisesRegex(ValueError, "incompatible"):
+        with self.assertRaisesRegex(
+            RNSSystemCompatibilityError,
+            "incompatible normalized RNS systems",
+        ) as caught:
             value.add(PPM(1, system=other_system))
+
+        self.assertIsInstance(caught.exception, RNSCompatibilityError)
+        self.assertIsInstance(caught.exception, RNSPypalError)
+        self.assertIsInstance(caught.exception, ValueError)
+        self.assertEqual(value.to_dict(), before)
 
     def test_compare_uses_mixed_radix_ordering(self):
         self.assertEqual(PPM(1, system=self.system).compare(PPM(2, system=self.system)), 0)
@@ -419,9 +432,18 @@ class TestPPM(unittest.TestCase):
         derived = PPM(42, system=system)
         derived.mod_div(2)
         normalized = PPM(21, system=system)
+        before = derived.to_dict()
 
-        with self.assertRaisesRegex(ValueError, "incompatible effective RNS formats"):
+        with self.assertRaisesRegex(
+            RNSEffectiveFormatError,
+            "incompatible effective RNS formats",
+        ) as caught:
             derived.add(normalized)
+
+        self.assertIsInstance(caught.exception, RNSCompatibilityError)
+        self.assertIsInstance(caught.exception, RNSPypalError)
+        self.assertIsInstance(caught.exception, ValueError)
+        self.assertEqual(derived.to_dict(), before)
 
         other_derived = PPM(10, system=system)
         other_derived.mod_div(2)

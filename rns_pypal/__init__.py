@@ -3,11 +3,14 @@
 from .config import DEFAULT_SYSTEM, REZ9_INTEGER_SYSTEM
 from .digit import PPMDigit
 from .errors import (
+    RNSCompatibilityError,
     RNSCriticalError,
     RNSDiagnosticLevel,
     RNSDiagnosticWarning,
+    RNSEffectiveFormatError,
     RNSPypalError,
     RNSRangeError,
+    RNSSystemCompatibilityError,
 )
 from .mixed_radix import MRDigit, MixedRadixDecomposer, iter_mixed_radix_digits
 from .modtable import DigitRole, RNSNumberSystem
@@ -36,6 +39,9 @@ __all__ = [
     "SIGN_VALID",
     "SIGN_INVALID",
     "RNSPypalError",
+    "RNSCompatibilityError",
+    "RNSSystemCompatibilityError",
+    "RNSEffectiveFormatError",
     "RNSCriticalError",
     "RNSRangeError",
     "RNSDiagnosticWarning",

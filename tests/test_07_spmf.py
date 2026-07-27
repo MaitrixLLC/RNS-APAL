@@ -6,7 +6,9 @@ from rns_pypal import (
     NEGATIVE,
     POSITIVE,
     RNSCriticalError,
+    RNSEffectiveFormatError,
     RNSNumberSystem,
+    RNSSystemCompatibilityError,
     SIGN_INVALID,
     SIGN_VALID,
     SPMF,
@@ -116,6 +118,37 @@ class TestSPMF(unittest.TestCase):
 
         with self.assertRaisesRegex(RNSCriticalError, "not in normal fraction position"):
             value.ensure_normal_fraction_position()
+
+    def test_spmf_inherits_system_compatibility_error_without_mutation(self):
+        other_system = RNSNumberSystem(
+            moduli=[2, 3, 7],
+            powers=[4, 2, 1],
+            fractional_digits=2,
+        )
+        value = SPMF(-7, system=self.system)
+        before = value.to_dict()
+
+        with self.assertRaisesRegex(
+            RNSSystemCompatibilityError,
+            "incompatible normalized RNS systems",
+        ):
+            value.add(SPMF(3, system=other_system))
+
+        self.assertEqual(value.to_dict(), before)
+
+    def test_spmf_inherits_effective_format_error_without_mutation(self):
+        value = SPMF(-7, system=self.system)
+        derived = SPMF(6, system=self.system)
+        derived.mod_div(2)
+        before = value.to_dict()
+
+        with self.assertRaisesRegex(
+            RNSEffectiveFormatError,
+            "incompatible effective RNS formats",
+        ):
+            value.mult(derived)
+
+        self.assertEqual(value.to_dict(), before)
 
     def test_spmf_assign_scaled_integer_and_format_parts(self):
         value = SPMF(0, system=self.system)

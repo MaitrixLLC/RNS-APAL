@@ -13,6 +13,18 @@ class RNSPypalError(Exception):
     """Base exception for RNS-PYPAL."""
 
 
+class RNSCompatibilityError(ValueError, RNSPypalError):
+    """Base exception for incompatible RNS operands or representations."""
+
+
+class RNSSystemCompatibilityError(RNSCompatibilityError):
+    """Operands belong to incompatible normalized RNS systems."""
+
+
+class RNSEffectiveFormatError(RNSCompatibilityError):
+    """Operands have incompatible effective partial-power formats."""
+
+
 class RNSRangeError(ValueError, RNSPypalError):
     """A checked assignment or range operation found an out-of-range value."""
 

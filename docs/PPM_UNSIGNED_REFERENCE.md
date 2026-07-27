@@ -47,6 +47,9 @@ The current `rns_pypal` package exports these unsigned-side objects and helpers:
 - `is_pairwise_coprime`
 - `multiplicative_inverse`
 - `RNSPypalError`
+- `RNSCompatibilityError`
+- `RNSSystemCompatibilityError`
+- `RNSEffectiveFormatError`
 - `RNSCriticalError`
 - `DEFAULT_SYSTEM`
 - `REZ9_INTEGER_SYSTEM`

@@ -135,6 +135,11 @@ positive plus a valid positive preserves a positive cached sign under the same
 assumption made by C/C++ integer arithmetic: the caller is responsible for range
 discipline.
 
+`SPPM` inherits `PPM` compatibility checks. Incompatible normalized systems
+raise `RNSSystemCompatibilityError`, while mismatched partial-power or
+skipped-digit formats raise `RNSEffectiveFormatError`. Both occur before signed
+arithmetic mutates residues or cached sign metadata.
+
 ## Formatting
 
 | Method | Purpose |

@@ -11,8 +11,10 @@ from rns_pypal import (
     RNSCriticalError,
     RNSDiagnosticLevel,
     RNSDiagnosticWarning,
+    RNSEffectiveFormatError,
     RNSRangeError,
     RNSNumberSystem,
+    RNSSystemCompatibilityError,
     SIGN_INVALID,
     SIGN_VALID,
     SPPM,
@@ -135,6 +137,33 @@ class TestSPPM(unittest.TestCase):
         self.assertEqual(SPPM(2, system=self.system).compare(SPPM(-1, system=self.system)), 1)
         self.assertEqual(SPPM(-1, system=self.system).compare(SPPM(2, system=self.system)), 0)
         self.assertEqual(SPPM(-1, system=self.system).compare(SPPM(-2, system=self.system)), 1)
+
+    def test_sppm_inherits_system_compatibility_error_without_mutation(self):
+        other_system = RNSNumberSystem(moduli=[2, 5], powers=[4, 1])
+        value = SPPM(-7, system=self.system)
+        before = value.to_dict()
+
+        with self.assertRaisesRegex(
+            RNSSystemCompatibilityError,
+            "incompatible normalized RNS systems",
+        ):
+            value.add(SPPM(3, system=other_system))
+
+        self.assertEqual(value.to_dict(), before)
+
+    def test_sppm_inherits_effective_format_error_without_mutation(self):
+        value = SPPM(-7, system=self.system)
+        derived = SPPM(6, system=self.system)
+        derived.mod_div(2)
+        before = value.to_dict()
+
+        with self.assertRaisesRegex(
+            RNSEffectiveFormatError,
+            "incompatible effective RNS formats",
+        ):
+            value.add(derived)
+
+        self.assertEqual(value.to_dict(), before)
 
     def test_add_same_sign_preserves_valid_sign(self):
         positive = SPPM(4, system=self.system)

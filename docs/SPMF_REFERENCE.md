@@ -242,6 +242,13 @@ the operation begins. If two operands are not aligned, a future implementation
 must either scale/align them through RNS operations or fail clearly. It must not
 silently treat different fraction positions as equivalent.
 
+System and effective partial-power incompatibilities are checked first through
+the inherited `PPM` machinery. They raise `RNSSystemCompatibilityError` and
+`RNSEffectiveFormatError`, respectively, before residues, sign metadata, or
+fraction metadata are mutated. Fraction-position mismatch and failure to return
+to the normal fraction position remain `RNSCriticalError` conditions pending a
+separate severity review.
+
 ## Data export
 
 `SPMF` inherits the residue and sign export methods from `SPPM` and extends

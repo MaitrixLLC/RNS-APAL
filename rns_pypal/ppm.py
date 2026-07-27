@@ -8,7 +8,13 @@ from typing import TextIO
 import sys
 
 from .digit import PPMDigit
-from .errors import RNSDiagnosticLevel, critical_error, report_diagnostic
+from .errors import (
+    RNSDiagnosticLevel,
+    RNSEffectiveFormatError,
+    RNSSystemCompatibilityError,
+    critical_error,
+    report_diagnostic,
+)
 from .modtable import RNSNumberSystem
 
 
@@ -338,13 +344,15 @@ class PPM:
 
     def _ensure_system_compatible(self, other: "PPM") -> None:
         if not self.system.is_compatible(other.system):
-            raise ValueError("incompatible normalized RNS systems")
+            raise RNSSystemCompatibilityError("incompatible normalized RNS systems")
 
     def _ensure_format_compatible(self, other: "PPM") -> None:
         self._ensure_system_compatible(other)
         for left, right in zip(self.rn, other.rn):
             if (left.power_valid, left.skip) != (right.power_valid, right.skip):
-                raise ValueError(f"incompatible effective RNS formats at digit {left.index}")
+                raise RNSEffectiveFormatError(
+                    f"incompatible effective RNS formats at digit {left.index}"
+                )
 
     def _zero_with_current_power_format(self) -> "PPM":
         result = PPM(0, system=self.system)

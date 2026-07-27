@@ -224,11 +224,18 @@ RNS-PYPAL has a loud critical-error path for violated RNS preconditions.
 | Object | Purpose |
 | --- | --- |
 | `RNSPypalError` | Base project exception. |
+| `RNSCompatibilityError` | Base for recoverable RNS operand-compatibility failures; also derives from `ValueError`. |
+| `RNSSystemCompatibilityError` | Normalized RNS system definitions are incompatible. |
+| `RNSEffectiveFormatError` | Partial-power or skipped-digit formats are incompatible. |
 | `RNSCriticalError` | Critical error class; currently derives from `ValueError`. |
 | `RNSRangeError` | Recoverable range-check exception. |
 | `RNSDiagnosticWarning` | Warning class for non-halting diagnostics. |
 | `RNSDiagnosticLevel` | Diagnostic severity selector. |
 | `critical_error(reason, **context)` | Raises `RNSCriticalError` with a `CRITICAL ERROR` prefix, call location, and context values. |
+
+Compatibility exceptions occur before arithmetic mutation. They can be caught
+through their specific class, the common `RNSCompatibilityError`,
+`RNSPypalError`, or `ValueError`.
 
 Critical errors are used when continuing would hide a broken mathematical
 precondition, such as dividing by zero, using division without a required base-2
@@ -249,7 +256,7 @@ The unsigned tests currently cover:
 - value formatting and raw residue formatting;
 - partial-power `mod_div`;
 - normalization and current-power extension;
-- derived-format compatibility checks;
+- system and derived-format compatibility exception and mutation-safety checks;
 - `assign()` for integers and strings;
 - `assign_rnd()` for deterministic seeded generation, leading zeroes, normalized
   format restoration, and argument validation;

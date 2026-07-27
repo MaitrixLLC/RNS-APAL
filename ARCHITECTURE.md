@@ -902,6 +902,16 @@ The existing `critical_error(...)` helper remains a hard-stop convenience path.
 Feature-specific APIs may expose a severity parameter when it is useful to let
 applications choose between exploratory diagnostics and strict execution.
 
+Operand compatibility failures are recoverable RNS-domain errors rather than
+critical invariant failures. `RNSCompatibilityError` is the common project
+base for these failures while also deriving from Python `ValueError`.
+`RNSSystemCompatibilityError` identifies incompatible normalized systems, and
+`RNSEffectiveFormatError` identifies incompatible partial-power or skipped-digit
+formats. Because `SPPM` and `SPMF` reuse the `PPM` compatibility checks, the
+same exceptions apply throughout the numeric hierarchy. Current `SPMF`
+fraction-position checks remain critical errors pending a separate severity
+review.
+
 ### Overflow and range policy
 
 Unless a method explicitly states otherwise, RNS-PYPAL arithmetic follows the
