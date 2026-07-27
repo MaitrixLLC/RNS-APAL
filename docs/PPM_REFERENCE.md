@@ -18,6 +18,46 @@ the semantics that actually change.
 This document describes the current unsigned integer class behavior. It is a
 review reference for the Python implementation, not a final user manual.
 
+## C++ porting crosswalk
+
+This table records the audited stable `PPM` paths in `cpp_ref/ppm.cpp` and
+their current Python equivalents. It excludes redundant, historical,
+clock-counting, and explicitly experimental routines; deferred families are
+listed after the table. A Python equivalent may deliberately consolidate C++
+overloads or improve its validation behavior.
+
+| C++ `PPM` method(s) | Python equivalent | Port status and notes |
+| --- | --- | --- |
+| `PPM()`, `PPM(__int64)`, copy/derived constructor | `__init__()`, `copy()`, `derived_format_copy()` | Ported and split into explicit Python operations. The C++ copy-format-then-assign pattern composes `assign_pm()` with construction. |
+| `Assign(int)`, `Assign(__int64)`, `Assign(string)`, `Assign(PPM *)` | `assign(value)` | Ported. Python accepts arbitrary-size unsigned decimal, hexadecimal, and binary strings. |
+| `AssignRnd(int)` | `assign_rnd(num_digits, *, seed=None)` | Ported with an optional deterministic seed for repeatable tests and examples. |
+| `AssignPM(PPM *)`, `AssignPM(__int64)`, `AssignPM(int, PPM *)` | `assign_pm(value, *, format_source=None)` | Ported and consolidated through the optional source-format argument. |
+| `chk_PM_format(PPM *)` | `_ensure_format_compatible(other)` | Ported with an intentional API change: Python raises `RNSEffectiveFormatError` rather than returning a Boolean status. |
+| `Add`, `Sub`, `Mult` scalar and `PPM *` overloads | `add()`, `sub()`, `mult()` | Ported and consolidated. Python checks normalized-system and effective-format compatibility before mutation. |
+| `Increment()`, `Decrement()` | `increment()`, `decrement()` | Ported. |
+| `ModDiv(int)` | `mod_div(divisor)` | Ported. Python validates same-base divisibility before changing the effective format. |
+| `ModDiv(PPM *)` | No separate public overload | Consolidated internally: mixed-radix processing uses explicit scalar factors and digit-level inverse multiplication rather than a residue-vector divisor API. |
+| `Complement()` | `complement()` | Ported. |
+| `Zero()`, `One()`, `IsEqual(PPM *)` | `is_zero()`, `is_one()`, `is_equal(other)` | Ported. |
+| `Compare(PPM *)` | `compare(other)` | Ported through streamed mixed-radix comparison. |
+| `ComparePart(PPM *, int)`, `IsEqualPart(PPM *, int)` | `compare_part(other, num_digits)`, `is_equal_part(other, num_digits)` | Ported. |
+| `Extend()`, `ExtendNorm()`, `ExtendPart2Norm()` | `extend_to_current_power()` | Ported as one derived-format-aware operation. The legacy normalized-only path is folded into the general implementation. |
+| `Normalize()` | `normalize()`, `normalized_copy()` | Ported. |
+| `DivStd(PPM *, PPM *)` routing to `DivPM7` | `div_std(divisor)` | Ported. Python mutates the dividend to the quotient and returns the remainder. |
+| `DivCheck(...)` | `_division_check(...)` | Ported as a private division invariant check. |
+| `Convert()`, `uConvert()` | `to_int()` | Ported and generalized to Python arbitrary-precision integers. |
+| `Print`, `Prints`, `Print10`, `Print16`, `Print2`, `PrintDemo`, `PrintPM`, and no-header variants | `format_value()`, `print_value()`, `format_native()`, `print_native()`, `format_whdr()`, `print_whdr()` | Ported but consolidated into formatting and printing APIs with radix and prefix options. |
+| `GetRange(PPM *, int)` | None | **Not yet ported.** An RNS-native prefix-range constructor is still needed by signed and fixed-point range paths. |
+| `GetFullRange(PPM *)` | `usable_range_max(system)` is only a normalized-system helper | **Not yet ported.** The C++ method must compute the maximum for the live derived effective format, not merely the normalized system. |
+| `Zero(int start_index)` | None | **Not yet ported.** Python has no active-digit suffix-zero predicate. |
+| `TruncateFirst(PPM *, int)` | None | **Not yet ported.** The C++ source parameter is unused and no call site establishes its intended source/destination contract. |
+
+Deferred C++ paths are intentionally outside this crosswalk: alternate
+`DivPM*` algorithms, `CompareDif`, `ModDiv2`, `Cfr`, clock counters,
+backup/restore, historical conversion routines, `Factorial`, `Sqrt`, and
+`GetMultRange`. They require a separate mathematical and behavioral review
+before becoming Python porting tasks.
+
 ## RNS system dependency
 
 Every `PPM` value belongs to an `RNSNumberSystem`. That system defines the
